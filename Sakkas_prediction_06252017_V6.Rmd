@@ -1,0 +1,302 @@
+---
+title: "Sakkas_prediction_06252017_V5"
+author: "Swapna Mahurkar-Joshi"
+date: "June 1, 2017"
+output:
+  html_document: default
+  word_document: default
+---
+
+```{r}
+library(miRNAfunctions)
+# ls("package:miRNAfunctions")
+library(NanoStringNorm)
+rccPath <- "C:/Users/swapnajoshi/Documents/UCLA_research/analysis_services/Iliopoulos_center_analyses/Sakkas_Iliopoulos/Phase_3/rccFiles_123"
+rccfiles<-read.markup.RCC(rcc.path = rccPath, rcc.pattern="*.RCC|*.rcc",  
+exclude=NULL, include = NULL, nprobes=-1)
+
+ph12<-rccfiles$x
+phenoDat<-read.delim("C:/Users/swapnajoshi/Documents/UCLA_research/analysis_services/Iliopoulos_center_analyses/Sakkas_Iliopoulos/Phase_3/phenoDat123.csv", sep=",")
+row.names(phenoDat) <- phenoDat[,1]
+
+```
+
+
+################################################## Batch 1 only
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+ph1 <- ph12[,c(1,2,3,grep("20150909", colnames(ph12)))]; dim(ph1)
+
+```
+
+
+```{r}
+colnames(ph1)[4:27] <- substr(colnames(ph1)[4:27],2,100)
+# traits <- pData1
+nano.norm<-NanoStringNorm(ph1,anno = NA,header = NA,
+                          Probe.Correction.Factor ='none',CodeCount='geo.mean',
+                          Background = 'mean',SampleContent =	'top.geo.mean',	
+                          OtherNorm =	'none',
+                          round.values = TRUE,
+                          is.log = FALSE,
+                          take.log = TRUE,
+                          return.matrix.of.endogenous.probes = FALSE,
+                          traits = NA,
+                          predict.conc = FALSE,
+                          verbose = TRUE,
+                          genes.to.fit,
+                          genes.to.predict,
+                          guess.cartridge = FALSE
+)
+
+```
+
+```{r}
+            
+nano.norm1 <- as.data.frame(nano.norm$normalized.data)
+row.names(nano.norm1) <- nano.norm1[,2]
+nano.norm2 <- nano.norm1 [nano.norm1$Code.Class == "Endogenous1", -c(1,2,3)]
+nano.norm2$mean1 <- apply(nano.norm2,1,mean)
+hist(nano.norm2$mean1)
+nano.norm3 <- subset(nano.norm2, nano.norm2$mean1 > 1); dim(nano.norm3)
+nano.norm3$mean1 <- NULL
+colnames(nano.norm3) <- substr(colnames(nano.norm3),2,100)
+
+phenoDat1 <- phenoDat[row.names(phenoDat)%in%colnames(nano.norm3),]; dim(phenoDat1 )
+phenoDat1 <- phenoDat1[colnames(nano.norm3),]
+pData1 <- as.data.frame(phenoDat1[colnames(nano.norm3),c(2,3)])
+match(colnames(nano.norm3),row.names(phenoDat1))
+phenoData <- new("AnnotatedDataFrame", data=pData1)
+exprDat <- new("ExpressionSet", exprs=as.matrix(nano.norm3), 
+               phenoData=phenoData)
+
+
+```
+
+```{r}
+library(limma)
+
+cont1 <- paste("endo", "Cont", sep = "-")
+cont2 <- paste("PCOS", "Cont", sep = "-")
+cont3 <- paste("endo", "PCOS", sep = "-")
+pData1$ActualSampleGroup <- substr(pData1$ActualSampleGroup,1,4)
+
+pData1$ActualSampleGroup <- as.factor(pData1$ActualSampleGroup)
+lmRes <- lmDF3F(exprs(exprDat), pData1$ActualSampleGroup, cont1, cont2, cont3)
+colnames(lmRes) <- c(paste(colnames(lmRes)[1:7],"Endometriosis_Controls", sep = "_"), paste(colnames(lmRes)[8:14],"PCOS_Controls", sep = "_"), paste(colnames(lmRes)[15:21],"Endometriosis_PCOS", sep = "_"))
+
+
+SigEndometriosis_Controls <- lmRes[lmRes$'P.Value_Endometriosis_Controls' <= 0.05,c(1:7)]; dim(SigEndometriosis_Controls)
+SigEndometriosis_Controls
+SigPCOS_Controls <- lmRes[lmRes$'P.Value_PCOS_Controls' <= 0.05,c(8:14)]; dim(SigPCOS_Controls)
+SigPCOS_Controls 
+SigEndometriosis_PCOS <- lmRes[lmRes$'P.Value_Endometriosis_PCOS' <= 0.05,c(15:21)]; dim(SigEndometriosis_PCOS)
+SigEndometriosis_PCOS 
+
+
+```
+################################################## Batch 2 only
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+# Exclude batch 2 and 3
+ph2 <- ph12[,c(1,2,3,grep("20160616", colnames(ph12)))]; dim(ph2)
+```
+
+
+```{r}
+colnames(ph2)[4:27] <- substr(colnames(ph2)[4:27],2,100)
+# traits <- pData1
+nano.norm<-NanoStringNorm(ph2,anno = NA,header = NA,
+                          Probe.Correction.Factor ='none',CodeCount='geo.mean',
+                          Background = 'mean',SampleContent =	'top.geo.mean',	
+                          OtherNorm =	'none',
+                          round.values = TRUE,
+                          is.log = FALSE,
+                          take.log = TRUE,
+                          return.matrix.of.endogenous.probes = FALSE,
+                          traits = NA,
+                          predict.conc = FALSE,
+                          verbose = TRUE,
+                          genes.to.fit,
+                          genes.to.predict,
+                          guess.cartridge = FALSE
+)
+
+```
+
+```{r}
+            
+nano.norm1 <- as.data.frame(nano.norm$normalized.data)
+row.names(nano.norm1) <- nano.norm1[,2]
+nano.norm2 <- nano.norm1 [nano.norm1$Code.Class == "Endogenous1", -c(1,2,3)]
+nano.norm2$mean1 <- apply(nano.norm2,1,mean)
+hist(nano.norm2$mean1)
+nano.norm3 <- subset(nano.norm2, nano.norm2$mean1 > 2); dim(nano.norm3)
+nano.norm3$mean1 <- NULL
+colnames(nano.norm3) <- substr(colnames(nano.norm3),2,100)
+
+phenoDat1 <- phenoDat[row.names(phenoDat)%in%colnames(nano.norm3),]; dim(phenoDat1 )
+phenoDat1 <- phenoDat1[colnames(nano.norm3),]
+pData1 <- as.data.frame(phenoDat1[colnames(nano.norm3),c(2,3)])
+match(colnames(nano.norm3),row.names(phenoDat1))
+phenoData <- new("AnnotatedDataFrame", data=pData1)
+exprDat <- new("ExpressionSet", exprs=as.matrix(nano.norm3), 
+               phenoData=phenoData)
+
+
+```
+
+```{r}
+library(limma)
+
+cont1 <- paste("endo", "Cont", sep = "-")
+cont2 <- paste("PCOS", "Cont", sep = "-")
+cont3 <- paste("endo", "PCOS", sep = "-")
+pData1$ActualSampleGroup <- substr(pData1$ActualSampleGroup,1,4)
+
+pData1$ActualSampleGroup <- as.factor(pData1$ActualSampleGroup)
+lmRes <- lmDF3F(exprs(exprDat), pData1$ActualSampleGroup, cont1, cont2, cont3)
+colnames(lmRes) <- c(paste(colnames(lmRes)[1:7],"Endometriosis_Controls", sep = "_"), paste(colnames(lmRes)[8:14],"PCOS_Controls", sep = "_"), paste(colnames(lmRes)[15:21],"Endometriosis_PCOS", sep = "_"))
+
+
+SigEndometriosis_Controls3 <- lmRes[lmRes$'P.Value_Endometriosis_Controls' <= 0.05,c(1:7)]; dim(SigEndometriosis_Controls3)
+SigEndometriosis_Controls3
+SigPCOS_Controls3 <- lmRes[lmRes$'P.Value_PCOS_Controls' <= 0.05,c(8:14)]; dim(SigPCOS_Controls3)
+SigPCOS_Controls3
+SigEndometriosis_PCOS3 <- lmRes[lmRes$'P.Value_Endometriosis_PCOS' <= 0.05,c(15:21)]; dim(SigEndometriosis_PCOS3)
+SigEndometriosis_PCOS3
+
+
+```
+
+
+################################################## Batch 3 only
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+# Exclude batch 2 and 3
+ph3 <- ph12[,c(1,2,3,grep("20161201", colnames(ph12)))]; dim(ph3)
+```
+
+
+```{r}
+colnames(ph3)[4:27] <- substr(colnames(ph3)[4:27],2,100)
+# traits <- pData1
+nano.norm<-NanoStringNorm(ph3,anno = NA,header = NA,
+                          Probe.Correction.Factor ='none',CodeCount='geo.mean',
+                          Background = 'mean',SampleContent =	'top.geo.mean',	
+                          OtherNorm =	'none',
+                          round.values = TRUE,
+                          is.log = FALSE,
+                          take.log = TRUE,
+                          return.matrix.of.endogenous.probes = FALSE,
+                          traits = NA,
+                          predict.conc = FALSE,
+                          verbose = TRUE,
+                          genes.to.fit,
+                          genes.to.predict,
+                          guess.cartridge = FALSE
+)
+
+```
+
+```{r}
+            
+nano.norm1 <- as.data.frame(nano.norm$normalized.data)
+row.names(nano.norm1) <- nano.norm1[,2]
+nano.norm2 <- nano.norm1 [nano.norm1$Code.Class == "Endogenous1", -c(1,2,3)]
+nano.norm2$mean1 <- apply(nano.norm2,1,mean)
+hist(nano.norm2$mean1)
+nano.norm3 <- subset(nano.norm2, nano.norm2$mean1 > 2); dim(nano.norm3)
+nano.norm3$mean1 <- NULL
+colnames(nano.norm3) <- substr(colnames(nano.norm3),2,100)
+
+phenoDat1 <- phenoDat[row.names(phenoDat)%in%colnames(nano.norm3),]; dim(phenoDat1 )
+phenoDat1 <- phenoDat1[colnames(nano.norm3),]
+pData1 <- as.data.frame(phenoDat1[colnames(nano.norm3),c(2,3)])
+match(colnames(nano.norm3),row.names(phenoDat1))
+phenoData <- new("AnnotatedDataFrame", data=pData1)
+exprDat <- new("ExpressionSet", exprs=as.matrix(nano.norm3), 
+               phenoData=phenoData)
+
+
+```
+
+```{r}
+library(limma)
+
+cont1 <- paste("endo", "Cont", sep = "-")
+cont2 <- paste("PCOS", "Cont", sep = "-")
+cont3 <- paste("endo", "PCOS", sep = "-")
+pData1$ActualSampleGroup <- substr(pData1$ActualSampleGroup,1,4)
+
+pData1$ActualSampleGroup <- as.factor(pData1$ActualSampleGroup)
+lmRes <- lmDF3F(exprs(exprDat), pData1$ActualSampleGroup, cont1, cont2, cont3)
+colnames(lmRes) <- c(paste(colnames(lmRes)[1:7],"Endometriosis_Controls", sep = "_"), paste(colnames(lmRes)[8:14],"PCOS_Controls", sep = "_"), paste(colnames(lmRes)[15:21],"Endometriosis_PCOS", sep = "_"))
+
+
+SigEndometriosis_Controls3 <- lmRes[lmRes$'P.Value_Endometriosis_Controls' <= 0.05,c(1:7)]; dim(SigEndometriosis_Controls3)
+SigEndometriosis_Controls3
+SigPCOS_Controls3 <- lmRes[lmRes$'P.Value_PCOS_Controls' <= 0.05,c(8:14)]; dim(SigPCOS_Controls3)
+SigPCOS_Controls3
+SigEndometriosis_PCOS3 <- lmRes[lmRes$'P.Value_Endometriosis_PCOS' <= 0.05,c(15:21)]; dim(SigEndometriosis_PCOS3)
+SigEndometriosis_PCOS3
+
+
+```
+```{r}
+colnames(ph12)[4:75] <- substr(colnames(ph12)[4:75],2,100)
+# traits <- pData1
+nano.norm<-NanoStringNorm(ph12,anno = NA,header = NA,
+                          Probe.Correction.Factor ='none',CodeCount='geo.mean',
+                          Background = 'mean',SampleContent =	'top.geo.mean',	
+                          OtherNorm =	'none',
+                          round.values = TRUE,
+                          is.log = FALSE,
+                          take.log = TRUE,
+                          return.matrix.of.endogenous.probes = FALSE,
+                          traits = NA,
+                          predict.conc = FALSE,
+                          verbose = TRUE,
+                          genes.to.fit,
+                          genes.to.predict,
+                          guess.cartridge = FALSE
+)
+```
+
+```{r}
+nano.norm1 <- as.data.frame(nano.norm$normalized.data)
+row.names(nano.norm1) <- nano.norm1[,2]
+nano.norm2 <- nano.norm1 [nano.norm1$Code.Class == "Endogenous1", -c(1,2,3)]
+nano.norm2$mean1 <- apply(nano.norm2,1,mean)
+hist(nano.norm2$mean1)
+nano.norm3 <- subset(nano.norm2, nano.norm2$mean1 > 1.5); dim(nano.norm3)
+nano.norm3$mean1 <- NULL
+colnames(nano.norm3) <- substr(colnames(nano.norm3),2,100)
+
+phenoDat1 <- phenoDat[row.names(phenoDat)%in%colnames(nano.norm3),]; dim(phenoDat1 )
+phenoDat1 <- phenoDat1[colnames(nano.norm3),]
+pData1 <- as.data.frame(phenoDat1[colnames(nano.norm3),c(2,3)])
+match(colnames(nano.norm3),row.names(phenoDat1))
+phenoData <- new("AnnotatedDataFrame", data=pData1)
+exprDat <- new("ExpressionSet", exprs=as.matrix(nano.norm3), 
+               phenoData=phenoData)
+
+```
+
+```{r}
+# cont1 <- paste("endo", "Cont", sep = "-")
+# cont2 <- paste("PCOS", "Cont", sep = "-")
+# cont3 <- paste("endo", "PCOS", sep = "-")
+pData1$ActualSampleGroup <- substr(pData1$ActualSampleGroup,1,4)
+
+pData1$ActualSampleGroup <- as.factor(pData1$ActualSampleGroup)
+x <- removeBatchEffect(exprs(exprDat), pData1$Run, design=model.matrix(~pData1$ActualSampleGroup))  
+fit <- eBayes(lmFit(x, model.matrix(~pData1$ActualSampleGroup)))
+y <- topTable(fit, coef=3, number=Inf)
+DEgenes <- y[y$P.Val<0.05,]
+
+
+fit <- eBayes(lmFit(exprs(exprDat), model.matrix(~pData1$Run+pData1$ActualSampleGroup)))
+y <- topTable(fit, coef=3, number=Inf)
+DEgenes <- y[y$P.Value<0.05,]
+
+```
+
+

@@ -1,0 +1,242 @@
+---
+title: "Permeability for PO1"
+author: "Swapna Mahurkar-Joshi"
+date: "September 21, 2017"
+output: html_document
+---
+##############################################################################################
+PO1
+##############################################################################################
+# Brain region based clusters
+```{r}
+clu1 <- read.csv("C:/Users/swapnajoshi-admin/Documents/GIT_workspace/IBS_PO1/cluster_assignments/Cluster_assignment4Metabolite sample.csv", row.names = 1)
+
+df1 <- per[row.names(per)%in%row.names(clu1),]; dim(df1)
+
+clu2 <- clu1[row.names(clu1)%in%row.names(per),]; dim(clu2)
+clu2 <- clu2[row.names(df1),]
+match(row.names(clu2), row.names(df1))
+df2 <- cbind(df1,clu2)
+write.csv(df2, file = "brainClustECCells.csv")
+
+t.test(df2$I~df2$pam)$p.value
+t.test(df2$I~df2$pam)$statistic
+df3<-df2[,c(3,4,5,6,7,8,17,18,19,20,21,22,23,24)]
+df_ttest_P <- matrix(NA, nrow = 8, ncol = 6)
+row.names(df_ttest_P) <- colnames(df3)[7:14]
+colnames(df_ttest_P) <- paste(colnames(df3[,c(1:6)]),"pvalue",sep = "_")
+df_ttest_P [,1] <- apply(df3[,7:14],2,function(x) summary(aov(df3[,1]~x))[[1]][["Pr(>F)"]][1])
+df_ttest_P [,2] <- apply(df3[,7:14],2,function(x) summary(aov(df3[,2]~x))[[1]][["Pr(>F)"]][1])
+df_ttest_P [,3] <- apply(df3[,7:14],2,function(x) summary(aov(df3[,3]~x))[[1]][["Pr(>F)"]][1])
+df_ttest_P [,4] <- apply(df3[,7:14],2,function(x) summary(aov(df3[,4]~x))[[1]][["Pr(>F)"]][1])
+df_ttest_P [,5] <- apply(df3[,7:14],2,function(x) summary(aov(df3[,5]~x))[[1]][["Pr(>F)"]][1])
+df_ttest_P [,6] <- apply(df3[,7:14],2,function(x) summary(aov(df3[,6]~x))[[1]][["Pr(>F)"]][1])
+# df_ttest_P [,7] <- apply(df3[,7:14],2,function(x) summary(aov(df3[,1]~x))[[1]][["F value"]][1])
+# df_ttest_P [,8] <- apply(df3[,7:14],2,function(x) summary(aov(df3[,2]~x))[[1]][["F value"]][1])
+# df_ttest_P [,9] <- apply(df3[,7:14],2,function(x) summary(aov(df3[,3]~x))[[1]][["F value"]][1])
+# df_ttest_P [,10] <- apply(df3[,7:14],2,function(x) summary(aov(df3[,4]~x))[[1]][["F value"]][1])
+# df_ttest_P [,11] <- apply(df3[,7:14],2,function(x) summary(aov(df3[,5]~x))[[1]][["F value"]][1])
+# df_ttest_P [,12] <- apply(df3[,7:14],2,function(x) summary(aov(df3[,6]~x))[[1]][["F value"]][1])
+
+round(df_ttest_P,2)
+
+```
+# enterotype association with permeabilty
+```{r}
+enter <- read.csv( "C:/Users/swapnajoshi-admin/Box Sync/IBS_PO1/enterotypeComparisons/Copy of Patient_enterotypes_for_Lin.csv")
+enter1 <- enter [order(enter[,1]),]
+enter1$dup1 <- duplicated(enter1[,1])
+dups <- enter1[enter1[,1]%in%enter1[enter1$dup1==TRUE,1],]
+dups$discordant <- for(i in 2: dim(dups)[1]){return(dups[i,3]==dups[i-1,3])}
+dups[grep("SCOR",dups$StudyDescription),] # SCOR samples do not have discordant duplicates 
+
+enter2 <- subset(enter1, enter1$dup1==FALSE); dim(enter2)
+row.names(enter2) <-enter2[,1]
+
+df1 <- per[row.names(per)%in%row.names(enter2),]; dim(df1)
+table(df1$Sex)
+# 32 16
+# F  M 
+# 18 14 
+
+enter2 <- enter2[row.names(enter2)%in%row.names(df1),]; dim(enter2)
+enter2 <- enter2[row.names(df1),]
+match(row.names(enter2), row.names(df1))
+df2 <- cbind(df1,enter2)
+write.csv(df2, file = "EnterotypePermeabilty.csv")
+
+summary(lm(df2$I~df2$Enterotype))[[1]][1,'Pr(>F)']
+
+df3<-df2[,c(3:8, 19)]
+df_aov_P <- matrix(NA, nrow = 6, ncol = 2)
+row.names(df_aov_P) <- colnames(df3)[1:6]
+colnames(df_aov_P) <- c("enterotype_p","enterotype_Fstatistic")
+df_aov_P [,1] <- apply(df3[,1:6],2,function(x) summary(aov(x~df3[,7]))[[1]][["Pr(>F)"]][1])
+df_aov_P [,2] <- apply(df3[,1:6],2,function(x) summary(aov(x~df3[,7]))[[1]][["F value"]][1])
+
+round(df_aov_P,2)
+
+library(knitr)
+kable(round(df_aov_P,2))
+```
+# boxplot for permeability
+```{r}
+library(ggplot2)
+p1 <- ggplot(df3, aes(as.factor(df3$Enterotype), df3$I))
+q1 <- p1  + geom_boxplot(outlier.color = NA) + geom_jitter() + labs(y = "Current", x = "Enterotype")
+df3$Sex <- df2$Sex
+df3$Dx <- df2$Dx
+df3$Enterotype <- gsub("One","1", df3$Enterotype); df3$Enterotype <- gsub("Two","2", df3$Enterotype); df3$Enterotype <- gsub("Three","3", df3$Enterotype)
+
+df3$Enterotype <- as.factor(df3$Enterotype)
+
+boxplot1 <- function(x,y,df,coljitter){ 
+  p <- ggplot(df, aes(x,y))
+  p+geom_boxplot(outlier.color = NA) + geom_jitter(aes(color = coljitter)) + labs(x = colnames(x), y = (colnames(y)))
+}
+
+library(gridExtra) 
+grid.arrange(for(i in 1:6){
+  q <- list()
+  q[[i]] <- ggplot(df3, aes(as.factor(df3[,7]),df3[,i])) + geom_boxplot(outlier.color = NA) + geom_jitter() + labs(x = "Enterotype" , y = colnames(df3)[i])
+  return(q)
+  }, ncol = 2)
+df3[,c(4:11)] <- apply(df3[,c(4:11)],2,as.factor)
+
+
+ggsave(grid.arrange(boxplot1(df3$Enterotype, df3$I,df3, df3$Dx), boxplot1(df3$Enterotype, df3$G,df3,df3$Dx), boxplot1(df3$Enterotype, df3$R,df3,df3$Dx), boxplot1(df3$Enterotype, df3$CCh,df3,df3$Dx), boxplot1(df3$Enterotype, df3$FD4.....,df3,df3$Dx), boxplot1(df3$Enterotype, df3$FD4.slope,df3,df3$Dx), ncol = 2), file = "Permeability_EnterotypesDx.png")
+ggsave(grid.arrange(boxplot1(df3$Enterotype, df3$I,df3, df3$Sex), boxplot1(df3$Enterotype, df3$G,df3,df3$Sex), boxplot1(df3$Enterotype, df3$R,df3,df3$Sex), boxplot1(df3$Enterotype, df3$CCh,df3,df3$Sex), boxplot1(df3$Enterotype, df3$FD4.....,df3,df3$Sex), boxplot1(df3$Enterotype, df3$FD4.slope,df3,df3$Sex), ncol = 2), file = "Permeability_EnterotypesSex.png")
+
+```
+```{r}
+library(ggplot2)
+theme_set(theme_bw(base_size = 18)) 
+library(scatterplot3d)
+library(effects)
+```
+
+```{r}
+anova(lm(df2$I~df2$Enterotype + df2$Sex))$'Pr(>F)'[1]
+# [1] 0.300033
+anova(lm(df2$G~df2$Enterotype + df2$Sex))$'Pr(>F)'[1]
+# [1] 0.6864039
+
+anova(lm(df2$R~df2$Enterotype + df2$Sex))$'Pr(>F)'[1]
+# [1] 0.6105827
+
+anova(lm(df2$CCh~df2$Enterotype + df2$Sex))$'Pr(>F)'[1]
+# [1] 0.506417
+
+anova(lm(df2$FD4.....~df2$Enterotype + df2$Sex))$'Pr(>F)'[1]
+# [1] 0.04924348
+
+anova(lm(df2$FD4.slope~df2$Enterotype + df2$Sex))$'Pr(>F)'[1]
+# [1] 0.07784556
+
+ggplot(data=df2, aes(x=Enterotype, y=I, colour=Sex)) + 
+  geom_line() #+ geom_vline(x=0, linetype='longdash')
+```
+# Association of permeability with clostridiales
+```{r}
+f_mic <- read.csv("C:/Users/swapnajoshi-admin/Box Sync/IBS_PO1/effectSizes/jonathan_fecMic_ibsHc_effectSize.csv", row.names = 1)
+f_mic$clostr_fraction <- f_mic $Clostridiales..../100
+f_mic$clostr_fraction <- f_mic$Bacteroides..../100
+df1 <- per[row.names(per)%in%row.names(f_mic),]; dim(df1)
+# > table(df1$Dx)
+# 
+#  HC IBS 
+#   4   8 
+
+clost <- f_mic[row.names(f_mic)%in%row.names(df1),]; dim(clost)
+clost <- clost[row.names(df1),]
+match(row.names(clost), row.names(df1))
+df2 <- cbind(df1,clost)
+write.csv(df2, file = "EnterotypePermeabilty.csv")
+
+summary(lm(df2$I~df2$clostr_fraction))[[1]][1,'Pr(>F)']
+
+df3<-df2[,c(3:8, 19)]
+df_aov_P <- matrix(NA, nrow = 6, ncol = 2)
+row.names(df_aov_P) <- colnames(df3)[1:6]
+colnames(df_aov_P) <- c("enterotype_p","enterotype_Fstatistic")
+df_aov_P [,1] <- apply(df3[,1:6],2,function(x) summary(aov(x~df3[,7]))[[1]][["Pr(>F)"]][1])
+df_aov_P [,2] <- apply(df3[,1:6],2,function(x) summary(aov(x~df3[,7]))[[1]][["F value"]][1])
+
+round(df_aov_P,2)
+
+library(knitr)
+kable(round(df_aov_P,2))
+
+summary(lm(df2$I ~ df2$clostr_fraction))[[4]][2,4]
+# [1] 0.642408
+
+summary(lm(df2$G ~ df2$clostr_fraction))[[4]][2,4]
+# [1] 0.4664455
+
+summary(lm(df2$R ~ df2$clostr_fraction))[[4]][2,4]
+# [1] 0.320416
+
+summary(lm(df2$FD4..... ~ df2$clostr_fraction))[[4]][2,4]
+# [1] 0.4953756
+
+summary(lm(df2$FD4.slope ~ df2$clostr_fraction))[[4]][2,4]
+# [1] 0.06373096
+
+library(ggplot2)
+p <- ggplot(df2, aes(clostr_fraction,FD4.slope))
+p + geom_point(size = 3) + geom_smooth(method='lm')
+
+```
+
+
+# Association of permeability with plasma metabolites
+```{r}
+df1_age <- read.csv("C:/Users/swapnajoshi-admin/Documents/GIT_workspace/IBS_PO1/RawData/df1_age.csv", row.names = 1)
+
+df2 <- df1_age[row.names(df1_age )%in%row.names(per),]
+per1 <- per[row.names(per)%in%row.names(df2),]
+per1 <- per1[row.names(df2),]
+match(row.names(df2),row.names(per1))
+df3 <-cbind(df2, per1)
+df4 <- subset(df3, df3$Dx=="IBS")
+
+cor.test(df4$Kynurenine,df4$I)[[3]]
+cor.test(df4$Kynurenine,df4$G)[[3]]
+cor.test(df4$Kynurenine,df4$R)[[3]]  #p =0.09 ibs and hc p=0.01
+cor.test(df4$Kynurenine,df4$FD4.....)[[3]]
+cor.test(df4$Kynurenine,df4$FD4.slope)[[3]]
+
+
+library(ggplot2)
+p <- ggplot(df3, aes(Kynurenine,R))
+p + geom_point(aes(color = df3$Dx), size=3) + geom_smooth(method='lm')
+
+p <- ggplot(df3, aes(Kynurenine,G))
+p + geom_point(size = 3) + geom_smooth(method='lm')
+```
+```{r}
+cor.test(df3$Serotonin,df3$I)[[3]]
+cor.test(df3$Serotonin,df3$G)[[3]]
+cor.test(df3$Serotonin,df3$R)[[3]]  #p =0.09 ibs and hc p=0.01
+cor.test(df3$Serotonin,df3$FD4.....)[[3]]
+cor.test(df3$Serotonin,df3$FD4.slope)[[3]]
+
+
+library(ggplot2)
+p <- ggplot(df3, aes(Serotonin,G))
+p + geom_point(aes(color = df3$Dx), size=3) + geom_smooth(method='lm')
+
+```
+
+```{r}
+cor.test(df3$Trp,df3$I)[[3]]
+cor.test(df3$Trp,df3$G)[[3]]
+cor.test(df3$Trp,df3$R)[[3]]  #p =0.09 ibs and hc p=0.01
+cor.test(df3$Trp,df3$FD4.....)[[3]]
+cor.test(df3$Trp,df3$FD4.slope)[[3]]
+
+
+library(ggplot2)
+p <- ggplot(df3, aes(Serotonin,G))
+p + geom_point(aes(color = df3$Dx), size=3) + geom_smooth(method='lm')
+```

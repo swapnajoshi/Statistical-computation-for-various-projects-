@@ -1,0 +1,420 @@
+---
+title: "Sakkas_prediction_07012016_V2"
+author: "Swapna Mahurkar-Joshi"
+date: "July 1, 2016"
+output: word_document
+---
+
+```{r, message =FALSE, echo=FALSE}
+# TODO: Add comment
+# 
+# Author: SwapnaJoshi
+###############################################################################
+## build the model
+
+# source("http://bioconductor.org/biocLite.R")
+# biocLite("mglogit")
+require('lars')
+require('impute')
+require('glmnet')
+library(NanoStringNorm)
+library(limma)
+library(class)
+library(devtools)
+require(caret)
+require(foreign)
+require(nnet)
+require(ggplot2)
+require(reshape2)
+require(mglogit)
+
+```
+
+```{r, message=FALSE}
+# setwd("C:/Users/swapnajoshi/Documents/UCLA_research/analysis_services/Iliopoulos_center_analyses/Sakkas_Iliopoulos/")
+rccfiles<-read.markup.RCC( rcc.path = "C:/Users/swapnajoshi/Documents/UCLA_research/analysis_services/Iliopoulos_center_analyses/Sakkas_Iliopoulos", rcc.pattern="*.RCC|*.rcc",  exclude=NULL, include = NULL, nprobes=-1)
+MirDf<-rccfiles$x
+colnames(MirDf)<-gsub(" ", "_",colnames(MirDf))
+MirDf1<-MirDf[-13,]
+
+nano.norm<-NanoStringNorm(MirDf1,anno = NA,header = NA,
+		Probe.Correction.Factor ='none',CodeCount ='none',
+		Background = 'mean.2sd',SampleContent =	'top.geo.mean',	OtherNorm =	'none',
+		round.values = FALSE,
+		is.log = FALSE,
+		take.log = TRUE,
+		return.matrix.of.endogenous.probes = FALSE,
+		traits = NA,
+		predict.conc = TRUE,
+		verbose = TRUE,
+		genes.to.fit,
+		genes.to.predict,
+		guess.cartridge = TRUE
+)
+
+norm.data<-nano.norm$normalized.data
+norm.data1<-subset(norm.data, norm.data$Code.Class!="Negative" & norm.data$Code.Class!="Housekeeping" & norm.data$Code.Class!="Positive" & norm.data$Code.Class!="Ligation"& norm.data$Code.Class!="SpikeIn")
+
+norm.data2<-norm.data1[,4:27]
+colnames(norm.data2)<-substr(colnames(norm.data2),2,100) ## remove the x infront of the colnames; and keep the rest
+
+raw.data<-nano.norm$raw.data
+raw.data1<-raw.data[,4:27]
+```
+
+```{r, message = FALSE, warning=FALSE, echo=FALSE}
+png('NanoStringNorm_QC_Plots_stool_ibd_topgeo.png', units ='in',  height = 6,   width = 6, res = 250, pointsize = 10);
+Plot.NanoStringNorm( x = nano.norm,
+		label.best.guess = TRUE,
+		plot.type = c('cv','mean.sd','RNA.estimates','volcano','missing','norm.factors','positive.controls','batch.effects'))
+dev.off()
+
+Plot.NanoStringNorm( x = nano.norm,
+		label.best.guess = TRUE,
+		plot.type = c('cv','mean.sd','RNA.estimates','volcano','missing','norm.factors','positive.controls','batch.effects'))
+
+
+mean2.sam<-apply(raw.data1,2,mean)
+png("boxplot_mirna_ibd_raw.png", height=1000, width=1000, res=200)
+boxplot(raw.data1,horizontal=FALSE,axes=TRUE,cex=0.2,outline=FALSE,xlab="x-axis label", ylab="y-axis label",las=1)
+axis(1,cex.axis=0.5)
+axis(2,cex.axis=0.5) 
+dev.off()
+boxplot(raw.data1,horizontal=FALSE,axes=TRUE,cex=0.2,outline=FALSE,xlab="x-axis label", ylab="y-axis label",las=1)
+axis(1,cex.axis=0.5)
+axis(2,cex.axis=0.5) 
+
+mean2.sam<-apply(norm.data2,2,mean)
+
+png("boxplot_mirna_ibd_norm.png", height=1000, width=1000, res=200)
+boxplot(norm.data2,horizontal=FALSE,axes=TRUE,cex=0.2,outline=FALSE,xlab="x-axis label", ylab="y-axis label",las=1)
+axis(1,cex.axis=0.5)
+axis(2,cex.axis=0.5) 
+dev.off()
+boxplot(norm.data2,horizontal=FALSE,axes=TRUE,cex=0.2,outline=FALSE,xlab="x-axis label", ylab="y-axis label",las=1)
+axis(1,cex.axis=0.5)
+axis(2,cex.axis=0.5) 
+
+```
+
+
+```{r}
+count.dat<-matrix(NA, nrow=dim(norm.data2)[1],ncol=dim(norm.data2)[2])
+
+for (i in 1:dim(norm.data2)[1])
+	for (j in 1: dim(norm.data2)[2])
+	{
+		if (norm.data2[i,j]>0)#> log(20,2) [1] 4.64
+		
+		{ count.dat[i,j]<-1}
+		
+		else if (norm.data2[i,j]<=0)
+		{ count.dat[i,j]<-0}
+	}
+
+row.names(count.dat)<-row.names(norm.data2)
+colnames(count.dat)<-colnames(norm.data2)
+
+count.dat<-as.data.frame(count.dat)
+
+count.dat$sum1<-apply(count.dat,1,sum)
+
+##### 25% of the probes must have data 
+probesInt<-subset(count.dat, count.dat$sum1>=6)
+norm.data4<-norm.data2[row.names(norm.data2)%in%row.names(probesInt),]
+
+dim(norm.data4)
+```
+
+```{r}
+save(norm.data4, file="C:/Users/swapnajoshi/Documents/UCLA_research/analysis_services/Iliopoulos_center_analyses/Sakkas_Iliopoulos/norm.data4.rda")
+train0 <- norm.data4
+
+```
+
+```{r}
+norm.data4.t<-t(norm.data4)
+norm.data4.t<-as.data.frame(norm.data4.t)
+phenoDat<-read.delim("C:/Users/swapnajoshi/Documents/UCLA_research/analysis_services/Iliopoulos_center_analyses/Sakkas_Iliopoulos/phenoDat1.csv", sep=",")
+row.names(phenoDat)<-phenoDat[,1]
+match(row.names(phenoDat),row.names(norm.data4.t))
+#  [1]  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24
+
+
+norm.data4.t$Disease<-phenoDat$Group
+
+#parametric or non parametric? generate a q-q plot
+meanDat<-phenoDat
+meanDat$mean1<-mean2.sam
+library(ggplot2)
+qqplot.data <- function (vec) # argument: vector of numbers
+{
+	# following four lines from base R's qqline()
+	y <- quantile(vec[!is.na(vec)], c(0.25, 0.75))
+	x <- qnorm(c(0.25, 0.75))
+	slope <- diff(y)/diff(x)
+	int <- y[1L] - slope * x[1L]
+	
+	d <- data.frame(resids = vec)
+	
+	ggplot(d, aes(sample = resids)) + stat_qq() + geom_abline(slope = slope, intercept = int)
+	
+}
+qqplot1<-qqplot.data(meanDat$mean1)
+qqplot1
+ggsave(qqplot1, file="qqplot.IBD.png") ## the plot shows clearly that the data are not normal
+#use non-parametric methods
+
+```
+# Import test data set
+```{r}
+# setwd("C:/Users/swapnajoshi/Documents/UCLA_research/analysis_services/Iliopoulos_center_analyses/Sakkas_Iliopoulos/phase_2_6282016/")
+rccfiles<-read.markup.RCC(rcc.path = "C:/Users/swapnajoshi/Documents/UCLA_research/analysis_services/Iliopoulos_center_analyses/Sakkas_Iliopoulos/phase_2_6282016", rcc.pattern="*.RCC|*.rcc",  exclude=NULL, include = NULL, nprobes=-1)
+MirDf<-rccfiles$x
+colnames(MirDf)<-gsub(" ", "_",colnames(MirDf))
+
+boxplot(MirDf[13:20,4:dim(MirDf)[2]]) # negative control box plot looks good 
+boxplot(MirDf[7:12,4:dim(MirDf)[2]]) # positive looks good as well
+
+nano.norm<-NanoStringNorm(MirDf,anno = NA,header = NA,
+		Probe.Correction.Factor ='none',CodeCount ='none',
+		Background = 'mean.2sd',SampleContent =	'top.geo.mean',	OtherNorm =	'none',
+		round.values = FALSE,
+		is.log = FALSE,
+		take.log = TRUE,
+		return.matrix.of.endogenous.probes = FALSE,
+		traits = NA,
+		predict.conc = TRUE,
+		verbose = TRUE,
+		genes.to.fit,
+		genes.to.predict,
+		guess.cartridge = TRUE
+)
+
+norm.data<-nano.norm$normalized.data
+norm.data1<-subset(norm.data, norm.data$Code.Class!="Negative" & norm.data$Code.Class!="Housekeeping" & norm.data$Code.Class!="Positive" & norm.data$Code.Class!="Ligation"& norm.data$Code.Class!="SpikeIn")
+
+norm.data2<-norm.data1[,4:27]
+colnames(norm.data2)<-substr(colnames(norm.data2),2,100) ## remove the x infront of the colnames; and keep the rest
+
+raw.data<-nano.norm$raw.data
+raw.data1<-raw.data[,4:27]
+```
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+
+png('NanoStringNorm_QC_Plots_stool_ibd_topgeo_batch2.png', units ='in',  height = 6,   width = 6, res = 250, pointsize = 10);
+Plot.NanoStringNorm( x = nano.norm,
+		label.best.guess = TRUE,
+		plot.type = c('cv','mean.sd','RNA.estimates','volcano','missing','norm.factors','positive.controls','batch.effects'))
+dev.off()
+Plot.NanoStringNorm( x = nano.norm,
+		label.best.guess = TRUE,
+		plot.type = c('cv','mean.sd','RNA.estimates','volcano','missing','norm.factors','positive.controls','batch.effects'))
+
+mean2.sam<-apply(raw.data1,2,mean)
+png("boxplot_mirna_ibd_raw_batch2.png", height=1000, width=1000, res=200)
+boxplot(raw.data1,horizontal=FALSE,axes=TRUE,cex=0.2,outline=FALSE,xlab="x-axis label", ylab="y-axis label",las=1)
+axis(1,cex.axis=0.5)
+axis(2,cex.axis=0.5) 
+dev.off()
+boxplot(raw.data1,horizontal=FALSE,axes=TRUE,cex=0.2,outline=FALSE,xlab="x-axis label", ylab="y-axis label",las=1)
+axis(1,cex.axis=0.5)
+axis(2,cex.axis=0.5) 
+
+mean2.sam<-apply(norm.data2,2,mean)
+
+png("boxplot_mirna_ibd_norm_batch2.png", height=1000, width=1000, res=200)
+boxplot(norm.data2,horizontal=FALSE,axes=TRUE,cex=0.2,outline=FALSE,xlab="x-axis label", ylab="y-axis label",las=1)
+axis(1,cex.axis=0.5)
+axis(2,cex.axis=0.5) 
+dev.off()
+boxplot(norm.data2,horizontal=FALSE,axes=TRUE,cex=0.2,outline=FALSE,xlab="x-axis label", ylab="y-axis label",las=1)
+axis(1,cex.axis=0.5)
+axis(2,cex.axis=0.5) 
+
+```
+
+```{r}
+count.dat<-matrix(NA, nrow=dim(norm.data2)[1],ncol=dim(norm.data2)[2])
+
+for (i in 1:dim(norm.data2)[1])
+	for (j in 1: dim(norm.data2)[2])
+	{
+		if (norm.data2[i,j]>0)#> log(20,2) [1] 4.64
+		
+		{ count.dat[i,j]<-1}
+		
+		else if (norm.data2[i,j]<=0)
+		{ count.dat[i,j]<-0}
+	}
+
+row.names(count.dat)<-row.names(norm.data2)
+colnames(count.dat)<-colnames(norm.data2)
+
+count.dat<-as.data.frame(count.dat)
+
+count.dat$sum1<-apply(count.dat,1,sum)
+
+##### 25% of the probes must have data 
+probesInt<-subset(count.dat, count.dat$sum1>=6)
+norm.data4<-norm.data2[row.names(norm.data2)%in%row.names(probesInt),]
+
+dim(norm.data4)
+test0 <- norm.data4
+```
+# Training data
+```{r}
+## set the seed to make your partition reproductible
+set.seed(123)
+
+phenoDat <- read.delim("C:/Users/swapnajoshi/Documents/UCLA_research/analysis_services/Iliopoulos_center_analyses/Sakkas_Iliopoulos/phenoDat1.csv", sep=",")
+row.names(phenoDat)<-phenoDat[,1]
+phenoDat <- phenoDat[colnames(train0),]
+match(row.names(phenoDat),colnames(train0))
+
+
+train1<- apply(train0,1,scale)
+# train2<-impute.knn(as.matrix(train1))$data
+row.names(train1) <- colnames(train0)
+colnames(train1) <- row.names(train0) ; dim(train1)# rows should be samples
+```
+
+```{r}
+dim(test0)
+test1<- apply(test0,1,scale)
+# test2<-impute.knn(as.matrix(test1))$data
+row.names(test1) <- colnames(test0)
+colnames(test1) <- row.names(test0) # rows should be samples
+train2 <- train1[,colnames(train1)%in%colnames(test1)]
+test2 <- test1[,colnames(test1)%in%colnames(train2)]
+test2 <- test2[,colnames(train2)] ;dim (train2)
+```
+
+```{r}
+phenoDat[,7] <- as.factor(phenoDat[,7])
+model <- multinom(phenoDat[,7] ~ train2)
+p.fit <- predict(model, test2, type='probs')
+probabilities<-data.frame(test2,p.fit)
+prob.dis <- as.data.frame(probabilities[,106:111])
+prob.dis$max1 <- NA
+
+for ( i in 1: dim(prob.dis)[1]) {
+  prob.dis[i,7] <- names(which.max(prob.dis[i,]))
+}
+
+as.data.frame(cbind(row.names(prob.dis),prob.dis[,7]))
+write.table(prob.dis, file = "prob_based_test_labesls.csv", sep = ',', col.names = NA)
+
+```
+
+```{r}
+pca1 <- prcomp(train2,
+                 center = TRUE,
+                 scale. = FALSE)
+# print(pca1)
+# plot method
+plot(pca1, type = "l")
+summary(pca1)
+
+library(devtools)
+install_github("ggbiplot", "vqv")
+ 
+library(ggbiplot)
+
+### to make the varnames disappear
+dimnames(pca1$rotation)[[1]] <- 
+   Reduce(function(x,y) paste0(x,y),    # function to concatentate the lanks
+          rep(" ",dim(pca1$rotation)[1]),   # corrrect number of blanks
+           acc=TRUE)                    # save all intermediate strings
+
+ 
+g <- ggbiplot(pca1, obs.scale = 1, var.scale = 1, 
+              groups = phenoDat[,7], ellipse = TRUE, 
+              circle = TRUE,linetype = "dashed", alpha_arrow = 0.0)
+# g <- g + scale_color_discrete(name = '')
+g <- g + theme(legend.direction = 'horizontal', 
+               legend.position = 'top') +  geom_point(aes(colour=phenoDat[,7]), size = 2) 
+ggsave(g, file = "PCA.plot.training.png", width = 4, height = 4, units = "in")
+print(g)
+
+```
+# Training data
+```{r}
+## set the seed to make your partition reproductible
+set.seed(123)
+
+phenoDat <- read.delim("C:/Users/swapnajoshi/Documents/UCLA_research/analysis_services/Iliopoulos_center_analyses/Sakkas_Iliopoulos/phenoDat1.csv", sep=",")
+row.names(phenoDat)<-phenoDat[,1]
+phenoDat <- phenoDat[colnames(train0),]
+match(row.names(phenoDat),colnames(train0))
+
+train1<- apply(train0,1,scale)
+# train2<-impute.knn(as.matrix(train1))$data
+row.names(train1) <- colnames(train0)
+colnames(train1) <- row.names(train0) ; dim(train1)# rows should be samples
+```
+
+```{r}
+dim(test0)
+test1<- apply(test0,1,scale)
+# test2<-impute.knn(as.matrix(test1))$data
+row.names(test1) <- colnames(test0)
+colnames(test1) <- row.names(test0) # rows should be samples
+train2 <- train1[,colnames(train1)%in%colnames(test1)]
+test2 <- test1[,colnames(test1)%in%colnames(train2)]
+test2 <- test2[,colnames(train2)] ;dim (train2)
+```
+
+```{r}
+phenoDat[,7] <- as.factor(phenoDat[,7])
+model <- multinom(phenoDat[,7] ~ train2)
+p.fit <- predict(model, test2, type='probs')
+probabilities<-data.frame(test2,p.fit)
+prob.dis <- as.data.frame(probabilities[,106:111])
+prob.dis$max1 <- NA
+
+for ( i in 1: dim(prob.dis)[1]) {
+  prob.dis[i,7] <- names(which.max(prob.dis[i,]))
+}
+
+as.data.frame(cbind(row.names(prob.dis),prob.dis[,7]))
+write.table(prob.dis, file = "prob_based_test_labesls.csv", sep = ',', col.names = NA)
+
+```
+
+PCA for test data set
+```{r}
+pca1 <- prcomp(test2,
+                 center = TRUE,
+                 scale. = FALSE)
+# print(pca1)
+# plot method
+plot(pca1, type = "l")
+summary(pca1)
+
+library(devtools)
+install_github("ggbiplot", "vqv")
+ 
+library(ggbiplot)
+match(row.names(prob.dis), row.names(test2))
+
+### to make the varnames disappear
+dimnames(pca1$rotation)[[1]] <- 
+   Reduce(function(x,y) paste0(x,y),    # function to concatentate the lanks
+          rep(" ",dim(pca1$rotation)[1]),   # corrrect number of blanks
+           acc=TRUE)                    # save all intermediate strings
+
+ 
+g <- ggbiplot(pca1, obs.scale = 1, var.scale = 1, 
+              groups = prob.dis[,7], ellipse = TRUE, 
+              circle = TRUE,linetype = "dashed", alpha_arrow = 0.0)
+# g <- g + scale_color_discrete(name = '')
+g <- g + theme(legend.direction = 'horizontal', 
+               legend.position = 'top') +  geom_point(aes(colour=prob.dis[,7]), size = 2) 
+ggsave(g, file = "PCA.plot.test.png", width = 4, height = 4, units = "in")
+print(g)
+
+```
+

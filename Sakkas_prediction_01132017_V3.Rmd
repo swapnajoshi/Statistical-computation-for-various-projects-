@@ -1,0 +1,423 @@
+---
+title: "Phase3_machine_learning"
+author: "Swapna Mahurkar-Joshi"
+date: "December 2, 2016"
+output: html_document
+---
+
+```{r}
+source("https://bioconductor.org/biocLite.R")
+biocLite("e1071")
+library(NanoStringNorm)
+# Training data
+setwd("C:/Users/swapnajoshi/Documents/UCLA_research/analysis_services/Iliopoulos_center_analyses/Sakkas_Iliopoulos/Phase_3/phase_1_2/")
+
+rccfiles1<-read.markup.RCC(rcc.pattern="*.RCC|*.rcc",  exclude=NULL, include = NULL, nprobes=-1)
+serumMirDf<-rccfiles1$x
+colnames(serumMirDf)<-gsub(" ", "_",colnames(serumMirDf))
+posC<-serumMirDf[7:12,]
+row.names(posC)<-posC[,2]
+
+
+posC<-posC[,4:51]
+posC1<-t(posC[sort(row.names(posC)),])
+
+png("boxplot.posControls.png")
+boxplot(posC1) 
+dev.off()
+setwd("C:/Users/swapnajoshi/Documents/UCLA_research/analysis_services/Iliopoulos_center_analyses/Sakkas_Iliopoulos/Phase_3/pos_cont/")
+
+for (i in 1:48)
+{
+	
+	png(paste(i,"posCon.png"))	
+	barplot(posC1[i,]) # to look at individual samples
+	dev.off()
+}
+
+#####################################
+setwd("C:/Users/swapnajoshi/Documents/UCLA_research/analysis_services/Iliopoulos_center_analyses/Sakkas_Iliopoulos/Phase_3/phase_1_2/")
+negC<-serumMirDf[13:20,]
+row.names(negC)<-negC[,2]
+
+
+negC<-negC[,4:51]
+negC1<-t(negC[sort(row.names(negC)),])
+
+png("boxplot.negControls.png")
+boxplot(negC1) 
+dev.off()
+
+setwd("C:/Users/swapnajoshi/Documents/UCLA_research/analysis_services/Iliopoulos_center_analyses/Sakkas_Iliopoulos/Phase_3/pos_cont/")
+
+for (i in 1:48)
+{
+	
+	png(paste(i,"negCon.png"))	
+	barplot(negC1[i,]) # to look at individual samples
+	dev.off()
+}
+setwd("C:/Users/swapnajoshi/Documents/UCLA_research/analysis_services/Iliopoulos_center_analyses/Sakkas_Iliopoulos/Phase_3/phase_1_2/")
+
+#negative control C not looking good remove probe number 13
+serumMirDf1<-serumMirDf[-13,]
+
+############
+
+nano.norm<-NanoStringNorm(serumMirDf1,anno = NA,header = NA,
+		Probe.Correction.Factor ='none',CodeCount ='none',
+		Background = 'none',SampleContent =	'top.geo.mean',	OtherNorm =	'none',
+		round.values = FALSE,
+		is.log = FALSE,
+		take.log = TRUE,
+		return.matrix.of.endogenous.probes = FALSE,
+		traits = NA,
+		predict.conc = TRUE,
+		verbose = TRUE,
+		genes.to.fit,
+		genes.to.predict,
+		guess.cartridge = TRUE
+)
+
+norm.data<-nano.norm$normalized.data
+norm.data1<-subset(norm.data, norm.data$Code.Class!="Negative" & norm.data$Code.Class!="Housekeeping" & norm.data$Code.Class!="Positive" & norm.data$Code.Class!="Ligation"& norm.data$Code.Class!="SpikeIn")
+
+norm.data2<-norm.data1[,4:51]
+setwd("C:/Users/swapnajoshi/Documents/UCLA_research/analysis_services/Iliopoulos_center_analyses/Sakkas_Iliopoulos/Phase_3/pos_cont/")
+
+png('NanoStringNorm_QC_Plots_stool_ibd_topgeo.png', units ='in',  height = 6,   width = 6, res = 250, pointsize = 10);
+Plot.NanoStringNorm( x = nano.norm,
+		label.best.guess = TRUE,
+		plot.type = c('cv','mean.sd','RNA.estimates','volcano','missing','norm.factors','positive.controls','batch.effects'))
+dev.off()
+colnames(norm.data2)<-substr(colnames(norm.data2),2,100) ## remove the x infront of the colnames; and keep the rest
+
+raw.data<-nano.norm$raw.data
+raw.data1<-raw.data[,4:51]
+mean2.sam<-apply(raw.data1,2,mean)
+
+
+png("boxplot_mirna_endo_raw.png", height=1000, width=1000, res=200)
+boxplot(raw.data1,horizontal=FALSE,axes=TRUE,cex=0.2,outline=FALSE,xlab="x-axis label", ylab="y-axis label",las=1)
+axis(1,cex.axis=0.5)
+axis(2,cex.axis=0.5) 
+dev.off()
+
+png("boxplot_mirna_endo_norm.png", height=1000, width=1000, res=200)
+boxplot(norm.data2,horizontal=FALSE,axes=TRUE,cex=0.2,outline=FALSE,xlab="x-axis label", ylab="y-axis label",las=1)
+axis(1,cex.axis=0.5)
+axis(2,cex.axis=0.5) 
+dev.off()
+
+mean2.sam<-apply(norm.data2,2,mean)
+dim(norm.data2)
+```
+
+```{r}
+setwd("C:/Users/swapnajoshi/Documents/UCLA_research/analysis_services/Iliopoulos_center_analyses/Sakkas_Iliopoulos/Phase_3/phase_1_2/")
+save(norm.data2, file="norm.data2.rda")
+
+count.dat<-matrix(NA, nrow=dim(norm.data2)[1],ncol=dim(norm.data2)[2])
+
+for (i in 1:dim(norm.data2)[1])
+	for (j in 1: dim(norm.data2)[2])
+	{
+		if (norm.data2[i,j]>=4.32)#> log(25,2) [1] 4.32
+		
+		{ count.dat[i,j]<-1}
+		
+		else if (norm.data2[i,j]<4.32)
+		{ count.dat[i,j]<-0}
+	}
+
+row.names(count.dat)<-row.names(norm.data2)
+colnames(count.dat)<-colnames(norm.data2)
+
+count.dat<-as.data.frame(count.dat)
+
+count.dat$sum1<-apply(count.dat,1,sum)
+
+##### 25% of the probes must pass the threshold of 25 counts or more -- 25% of 48 =12 samples
+probesInt<-subset(count.dat, count.dat$sum1>=12)
+norm.data4<-norm.data2[row.names(norm.data2)%in%row.names(probesInt),]
+
+dim(norm.data4)
+# [1] 310 48
+# colnames(norm.data4) <- substr(colnames(norm.data4),2,100)
+save(norm.data4, file="norm.data4.endo.rda")
+
+norm.data4.t<-t(norm.data4)
+norm.data4.t<-as.data.frame(norm.data4.t)
+
+phenoDat<-read.delim("phenoDat1.csv", sep=",")
+row.names(phenoDat)<-phenoDat[,1]
+phenoDat1 <- phenoDat[row.names(norm.data4.t),]
+
+match(row.names(phenoDat1),row.names(norm.data4.t))
+#  [1]  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24
+
+
+norm.data4.t$Disease<-phenoDat1$Actual.Sample.Group
+
+#parametric or non parametric? generate a q-q plot
+meanDat<-phenoDat
+meanDat$mean1<-mean2.sam
+library(ggplot2)
+qqplot.data <- function (vec) # argument: vector of numbers
+{
+	# following four lines from base R's qqline()
+	y <- quantile(vec[!is.na(vec)], c(0.25, 0.75))
+	x <- qnorm(c(0.25, 0.75))
+	slope <- diff(y)/diff(x)
+	int <- y[1L] - slope * x[1L]
+	
+	d <- data.frame(resids = vec)
+	
+	ggplot(d, aes(sample = resids)) + stat_qq() + geom_abline(slope = slope, intercept = int)
+	
+}
+qqplot1<-qqplot.data(meanDat$mean1)
+ggsave(qqplot1, file="qqplot.endo.png") ## the plot shows clearly that the data are not normal
+#use non-parametric methods
+
+trainData <- norm.data4 
+
+```
+
+```{r}
+
+###########test data
+setwd("C:/Users/swapnajoshi/Documents/UCLA_research/analysis_services/Iliopoulos_center_analyses/Sakkas_Iliopoulos/Phase_3/raw_files/")
+
+rccfiles1<-read.markup.RCC(rcc.pattern="*.RCC|*.rcc",  exclude=NULL, include = NULL, nprobes=-1)
+serumMirDf<-rccfiles1$x
+colnames(serumMirDf)<-gsub(" ", "_",colnames(serumMirDf))
+posC<-serumMirDf[7:12,]
+row.names(posC)<-posC[,2]
+
+
+posC<-posC[,4:27]
+posC1<-t(posC[sort(row.names(posC)),])
+
+png("boxplot.posControls.png")
+boxplot(posC1) 
+dev.off()
+
+for (i in 1:24)
+{
+	
+	png(paste(i,"posCon.png"))	
+	barplot(posC1[i,]) # to look at individual samples
+	dev.off()
+}
+
+#####################################
+
+negC<-serumMirDf[13:20,]
+row.names(negC)<-negC[,2]
+
+
+negC<-negC[,4:27]
+negC1<-t(negC[sort(row.names(negC)),])
+
+png("boxplot.negControls.png")
+boxplot(negC1) 
+dev.off()
+
+
+
+for (i in 1:24)
+{
+	
+	png(paste(i,"negCon.png"))	
+	barplot(negC1[i,]) # to look at individual samples
+	dev.off()
+}
+
+#negative controls not looking good
+# serumMirDf1<-serumMirDf[-13,]
+############
+
+nano.norm<-NanoStringNorm(serumMirDf,anno = NA,header = NA,
+		Probe.Correction.Factor ='none',CodeCount ='none',
+		Background = 'none',SampleContent =	'top.geo.mean',	OtherNorm =	'none',
+		round.values = FALSE,
+		is.log = FALSE,
+		take.log = TRUE,
+		return.matrix.of.endogenous.probes = FALSE,
+		traits = NA,
+		predict.conc = TRUE,
+		verbose = TRUE,
+		genes.to.fit,
+		genes.to.predict,
+		guess.cartridge = TRUE
+)
+
+```
+
+```{r}
+norm.data<-nano.norm$normalized.data
+norm.data1<-subset(norm.data, norm.data$Code.Class!="Negative" & norm.data$Code.Class!="Housekeeping" & norm.data$Code.Class!="Positive" & norm.data$Code.Class!="Ligation"& norm.data$Code.Class!="SpikeIn")
+
+norm.data2<-norm.data1[,4:27]
+colnames(norm.data2)<-substr(colnames(norm.data2),2,100) ## remove the x infront of the colnames; and keep the rest
+
+raw.data<-nano.norm$raw.data
+raw.data1<-raw.data[,4:27]
+mean2.sam<-apply(raw.data1,2,mean)
+
+
+```
+
+```{r}
+save(norm.data2, file="norm.data2.test.rda")
+
+count.dat<-matrix(NA, nrow=dim(norm.data2)[1],ncol=dim(norm.data2)[2])
+
+for (i in 1:dim(norm.data2)[1])
+	for (j in 1: dim(norm.data2)[2])
+	{
+		if (norm.data2[i,j]>=4.32)#> log(20,2) [1] 4.32
+		
+		{ count.dat[i,j]<-1}
+		
+		else if (norm.data2[i,j]<4.32)
+		{ count.dat[i,j]<-0}
+	}
+
+row.names(count.dat)<-row.names(norm.data2)
+colnames(count.dat)<-colnames(norm.data2)
+
+count.dat<-as.data.frame(count.dat)
+
+count.dat$sum1<-apply(count.dat,1,sum)
+
+##### 25% of the probes must pass the threshold of 25 counts or more -- 25% of 48 =12 samples
+probesInt<-subset(count.dat, count.dat$sum1>=6)
+norm.data4<-norm.data2[row.names(norm.data2)%in%row.names(probesInt),]
+
+dim(norm.data4)
+# [1] 30 24
+save(norm.data4, file="norm.data4.endo.test.rda")
+# sunce only 30 probes have count more than 20 in 25% subjects, we directly look at the probes from training data set and try to predict
+testData <- norm.data4
+```
+
+```{r}
+setwd("C:/Users/swapnajoshi/Documents/UCLA_research/analysis_services/Iliopoulos_center_analyses/Sakkas_Iliopoulos/Predictions/")
+# common probes between train and test
+train1 <- trainData[row.names(trainData)%in%row.names(testData),]
+test1 <- testData[row.names(testData)%in%row.names(train1),]
+test1<- test1[row.names(train1),]
+match(row.names(train1), row.names(test1))
+# rows as samples 
+match(colnames(train1), row.names(phenoDat1))
+trainPheno <- as.factor(phenoDat1$ActualSampleGroup)
+train2 <- as.data.frame(t(train1))
+train2$y <- trainPheno
+# row.names(train2) <- 
+library(randomForest)
+library(ROCR)
+set.seed(1022)
+# varNames <- names(train2)
+# varNames <- varNames[!varNames %in% c("y")]
+# varNames1 <- paste(varNames, "+")
+# rf.form <- as.formula(paste("y", varNames, sep = " ~ "))
+model1 <- randomForest(y=as.factor(train2[,26]),x=as.matrix(train2[,-26]), ntree=500, importance = TRUE)
+plot(model1)
+varImpPlot(model1,
+           sort = T,
+           main="Variable Importance",
+           n.var=5)
+
+# Variable Importance Table
+var.imp <- data.frame(importance(model1,
+           type=2))
+# make row names as columns
+var.imp$Variables <- row.names(var.imp)
+impOrder <- var.imp[order(var.imp$MeanDecreaseGini,decreasing = T),]
+
+# Predicting response variable
+train2$predicted.response <- predict(model1 ,train2)
+
+# Confusion matrix
+#load Library or packages
+library(e1071)
+library(caret)
+## Loading required package: lattice
+## Loading required package: ggplot2
+# Create Confusion Matrix
+confusionMatrix(data=train2$predicted.response, reference=train2$y, positive = 'yes')
+#  Confusion Matrix and Statistics
+# 
+#                                       Reference
+# Prediction                             Control                              endometriosis PCOS
+#   Control                                                                15             0    0
+#   endometriosis                                                           0            15    0
+#   PCOS                                                                    0             0   18
+# 
+# Overall Statistics
+#                                     
+#                Accuracy : 1         
+#                  95% CI : (0.926, 1)
+#     No Information Rate : 0.375     
+#     P-Value [Acc > NIR] : < 2.2e-16 
+#                                     
+#                   Kappa : 1         
+#  Mcnemar's Test P-Value : NA        
+# 
+# Statistics by Class:
+# 
+#                      Class: Control                              Class: endometriosis Class: PCOS
+# Sensitivity                                               1.0000               1.0000       1.000
+# Specificity                                               1.0000               1.0000       1.000
+# Pos Pred Value                                            1.0000               1.0000       1.000
+# Neg Pred Value                                            1.0000               1.0000       1.000
+# Prevalence                                                0.3125               0.3125       0.375
+# Detection Rate                                            0.3125               0.3125       0.375
+# Detection Prevalence                                      0.3125               0.3125       0.375
+# Balanced Accuracy                                         1.0000               1.0000       1.000
+```
+
+```{r}
+# Predicting response variable
+test2 <- as.data.frame(t(test1))
+test2$predicted.response <- predict(model1 ,test2)
+ 
+# Create Confusion Matrix
+confusionMatrix(data=test2$predicted.response,
+                reference=test2$predicted.response,
+                positive='yes')
+#  Confusion Matrix and Statistics
+# 
+#                                       Reference
+# Prediction                             Control                              endometriosis PCOS
+#   Control                                                                 5             0    0
+#   endometriosis                                                           0            16    0
+#   PCOS                                                                    0             0    3
+# 
+# Overall Statistics
+#                                      
+#                Accuracy : 1          
+#                  95% CI : (0.8575, 1)
+#     No Information Rate : 0.6667     
+#     P-Value [Acc > NIR] : 5.94e-05   
+#                                      
+#                   Kappa : 1          
+#  Mcnemar's Test P-Value : NA         
+# 
+# Statistics by Class:
+# 
+#                      Class: Control                              Class: endometriosis Class: PCOS
+# Sensitivity                                               1.0000               1.0000       1.000
+# Specificity                                               1.0000               1.0000       1.000
+# Pos Pred Value                                            1.0000               1.0000       1.000
+# Neg Pred Value                                            1.0000               1.0000       1.000
+# Prevalence                                                0.2083               0.6667       0.125
+# Detection Rate                                            0.2083               0.6667       0.125
+# Detection Prevalence                                      0.2083               0.6667       0.125
+# Balanced Accuracy                                         1.0000               1.0000       1.000
+ 
+write.table(test2, file = "test.prediction_batch3.txt", sep = '\t')
+```
+

@@ -1,0 +1,769 @@
+---
+title: "AditiBhargavaUCSF"
+author: "Swapna Mahurkar-Joshi"
+date: "October 12, 2017"
+output:
+  pdf_document: default
+  html_document: default
+---
+This project includes 1. calculating differences inoutcomes by groups for 3 vairables, interaction; 2.mean and standard deviation for all the 3 outcome measures and 3. calculate sample size
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Libraries
+```{r, echo = FALSE, include = FALSE}
+library(pwr)
+library(knitr)
+library(reshape)
+library(ggplot2)
+```
+
+# Import data
+```{r}
+us <- read.csv("C:/Users/swapnajoshi-admin/Documents/GIT_workspace/otherPIprojects/AditiBhargava_UCSF/data/Ussing chamber data analysis-IBS plasma(1).csv", row.names = 2)
+colnames(us)[c(6,8,10,11,12)] <- c("BH_screen","BH_colon","Isc","TER","Flux")
+us <- us[,-c(1,5,7,9,13)]
+```
+
+# Test normalilty of ditribution
+```{r}
+hist(us$Isc)
+hist(us$TER)
+hist(us$Flux)
+
+```
+# identify and remove outliers 
+```{r}
+us <- as.data.frame(us)
+# sd3 <- 3*sd(us$Isc)
+# us$outlier1 <- ifelse(us$Isc>sd3,1,0)
+# sd3 <- 3*sd(abs(us$TER))
+# us$outlier2 <- ifelse(abs(us$TER)>sd3,1,0)
+lowerq = quantile(us$Isc)[2]
+upperq = quantile(us$Isc)[4]
+iqr = upperq - lowerq
+threshold.upper = (iqr * 3) + upperq; #355.1725
+threshold.lower = lowerq - (iqr * 3); #-203.795 
+# No outlier found according to these criteria
+
+lowerq = quantile(us$TER)[2]
+upperq = quantile(us$TER)[4]
+iqr = upperq - lowerq
+threshold.upper = (iqr * 3) + upperq; # 24.985
+threshold.lower = lowerq - (iqr * 3); # -42.9325
+# No outlier found according to these criteria
+
+lowerq = quantile(abs(us$Flux))[2]
+upperq = quantile(abs(us$Flux))[4]
+iqr = upperq - lowerq
+threshold.upper = (iqr *3) + upperq; # 97
+threshold.lower = lowerq - (iqr * 3); # -34
+# No outlier found according to these criteria
+
+us$Flux <- ifelse(us$Flux>97,NA, us$Flux); #using non-parametric tests, due to limited data points none was excluded
+hist(us$Flux)
+```
+
+# non-parametric tests
+```{r}
+library(knitr)
+us$dxSexInt <- interaction(us$Dx, us$Gender)
+
+w_p <- function (modelobject) {
+     p <- modelobject$p.value
+    return(p)
+}
+us[,c(1:2,4,9)] <- lapply(us[,c(1:2,4,9)],as.factor)
+
+comb1 <- expand.grid(names(us[,c(6:8)]),names(us[,c(1,2)]))
+
+models <- lapply(paste(comb1[,1],comb1[,2], sep = "~"), formula)
+res.models <- lapply(models, FUN = function(x) {wilcox.test(formula = x, data = us)})
+# names(res.models) <- paste(comb1[,1],comb1[,2], sep = "~")
+resDf <- round(matrix(t(data.frame(lapply(res.models, FUN = w_p))),nrow=3, ncol=2),3)
+colnames(resDf) <- names(us[,c(1,2)])
+row.names(resDf) <- names(us[,c(6:8)])
+kable(resDf, caption = "Association between IBS plasma variables and  mouse permreability")
+```
+
+```{r}
+# Differences between C-D;
+usCD <- subset(us, us$BH_screen=="C"| us$BH_screen=="D")
+usCD$BH_screen <- factor(usCD$BH_screen)
+comb1 <- expand.grid(names(usCD[,c(6:8)]),colnames(usCD)[4])
+
+models <- lapply(paste(comb1[,1],comb1[,2], sep = "~"), formula)
+res.models <- lapply(models, FUN = function(x) {wilcox.test(formula = x, data = usCD)})
+# names(res.models) <- paste(comb1[,1],comb1[,2], sep = "~")
+resDf <- round(matrix(t(data.frame(lapply(res.models, FUN = w_p))),nrow=3, ncol=1),3)
+colnames(resDf) <- colnames(usCD)[4]
+row.names(resDf) <- names(usCD[,c(6:8)])
+kable(resDf, caption = "Association between Bowel Habits C and D and  mouse permreability")
+
+# Differences between M-D;
+usMD <- subset(us, us$BH_screen=="M"| us$BH_screen=="D"|us$BH_screen=="U")
+usMD$BH_screen <- as.factor(gsub("U","M", usMD$BH_screen))
+usMD$BH_screen <- factor(usMD$BH_screen)
+comb1 <- expand.grid(names(usMD[,c(6:8)]),colnames(usMD)[4])
+models <- lapply(paste(comb1[,1],comb1[,2], sep = "~"), formula)
+res.models <- lapply(models, FUN = function(x) {wilcox.test(formula = x, data = usMD)})
+# names(res.models) <- paste(comb1[,1],comb1[,2], sep = "~")
+resDf <- round(matrix(t(data.frame(lapply(res.models, FUN = w_p))),nrow=3, ncol=1),3)
+colnames(resDf) <- colnames(usMD)[4]
+row.names(resDf) <- names(usMD[,c(6:8)])
+kable(resDf, caption = "Association between Bowel Habits M and D and  mouse permreability")
+
+k_p <- function (modelobject) {
+     p <- modelobject$p.value
+    return(p)
+}
+
+comb1 <- expand.grid(names(us[,c(6:8)]),names(us[,c(4,9)]))
+
+models <- lapply(paste(comb1[,1],comb1[,2], sep = "~"), formula)
+res.models <- lapply(models, FUN = function(x) {kruskal.test(formula = x, data = us)})
+# names(res.models) <- paste(comb1[,1],comb1[,2], sep = "~")
+resDf <- as.data.frame(resDf)
+resDf$BowelHabits <- round(t(data.frame(lapply(res.models, FUN = k_p))),3)[,1][1:3]
+resDf$DxSexInt <- round(t(data.frame(lapply(res.models, FUN = k_p))),3)[,1][4:6]
+kable(resDf, caption = "Association between IBS plasma variables and  mouse permreability")
+
+```
+# Melting data; Descriptive statistics
+```{r}
+# Dx
+us1 <- us[,-c(3,5)]
+mdata <- melt(us1, id=c("Dx","Gender","BH_screen","dxSexInt")) 
+DxMean <- cast(mdata, Dx~variable, mean, na.rm = TRUE)
+DxMean[,2:4] <- round(DxMean[,2:4],2)
+DxSd <- cast(mdata, Dx~variable, sd, na.rm = TRUE)
+DxSd[,2:4] <- round(DxSd[,2:4],2)
+
+dfStatsPar <-  matrix(NA, nrow=2, ncol = 4)
+row.names(dfStatsPar) <- DxMean[,1]
+colnames(dfStatsPar) <- colnames(DxMean)
+for ( i in 1:2){
+  for (j in 2:4) { 
+    dfStatsPar[i,j] <- paste(DxMean[i,j],"(",DxSd[i,j],")", sep = "")
+    }
+}
+kable(t(dfStatsPar), caption = "summary statistics parametric Dx")
+
+# Sex
+SexMean <- cast(mdata, Gender~variable, mean, na.rm = TRUE)
+SexMean[,2:4] <- round(SexMean[,2:4],2)
+SexSd <- cast(mdata, Gender~variable, sd, na.rm = TRUE)
+SexSd[,2:4] <- round(SexSd[,2:4],2)
+
+dfStatsPar <-  matrix(NA, nrow=2, ncol = 4)
+row.names(dfStatsPar) <- SexMean[,1]
+colnames(dfStatsPar) <- colnames(SexMean)
+for ( i in 1:2){
+  for (j in 2:4) { 
+    dfStatsPar[i,j] <- paste(SexMean[i,j],"(",SexSd[i,j],")", sep = "")
+    }
+}
+kable(t(dfStatsPar), caption = "summary statistics parametric Sex")
+
+# BH
+BHMean <- cast(mdata, BH_screen~variable, mean, na.rm = TRUE)
+BHMean[,2:4] <- round(BHMean[,2:4],2)
+BHSd <- cast(mdata, BH_screen~variable, sd, na.rm = TRUE)
+BHSd[,2:4] <- round(BHSd[,2:4],2)
+
+dfStatsPar <-  matrix(NA, nrow=5, ncol = 4)
+row.names(dfStatsPar) <- BHMean[,1]
+colnames(dfStatsPar) <- colnames(BHMean)
+for ( i in 1:5){
+  for (j in 2:4) { 
+    dfStatsPar[i,j] <- paste(BHMean[i,j],"(",BHSd[i,j],")", sep = "")
+    }
+}
+kable(t(dfStatsPar), caption = "summary statistics parametric BH at Screeening")
+
+# Dx-Sex int
+IntMean <- cast(mdata, dxSexInt~variable, mean, na.rm = TRUE)
+IntMean[,2:4] <- round(IntMean[,2:4],2)
+IntSd <- cast(mdata, dxSexInt~variable, sd, na.rm = TRUE)
+IntSd[,2:4] <- round(IntSd[,2:4],2)
+
+dfStatsPar <-  matrix(NA, nrow=4, ncol = 4)
+row.names(dfStatsPar) <- IntMean[,1]
+colnames(dfStatsPar) <- colnames(IntMean)
+for ( i in 1:4){
+  for (j in 2:4) { 
+    dfStatsPar[i,j] <- paste(IntMean[i,j],"(",IntSd[i,j],")", sep = "")
+    }
+}
+kable(t(dfStatsPar), caption = "summary statistics parametric IBS-Sex Interaction")
+
+```
+
+# Power calculations
+```{r}
+# Isc
+## 1. Dx parametric
+diff <- abs(73.44 - 85.31)
+sdDiff <- sqrt(mean(c(49.29^2,50.17^2)))
+ES = diff/sdDiff; 
+IscSex <- pwr.t.test(d = ES, sig.level = 0.05, power = 0.8, type = "two.sample")
+
+## 2. Sex parametric
+diff <- abs(92.4 - 62.39)
+sdDiff <- sqrt(mean(c(49.77^2,44.72^2)))
+ES = diff/sdDiff; 
+IscDx <- pwr.t.test(d = ES, sig.level = 0.05, power = 0.8, type = "two.sample")[1]
+
+## 3. BH parametric (C vs D)
+diff <- abs(59.13 - 110.61)
+sdDiff <- sqrt(mean(c(57.98^2,35.96^2)))
+ES = diff/sdDiff; 
+pwr.t.test(d = ES, sig.level = 0.05, power = 0.8, type = "two.sample")
+
+## 4. BH parametric (M vs D)
+diff <- abs(49.17 - 110.61)
+sdDiff <- sqrt(mean(c(29.13^2,35.96^2)))
+ES = diff/sdDiff; 
+pwr.t.test(d = ES, sig.level = 0.05, power = 0.8, type = "two.sample")
+
+## 4. Interaction parametric (IBS-F vs HC-F)
+diff <- abs(78.94 - 119.32)
+sdDiff <- sqrt(mean(c(51.96^2,39.09^2)))
+ES = diff/sdDiff; 
+pwr.t.test(d = ES, sig.level = 0.05, power = 0.8, type = "two.sample")
+```
+
+```{r}
+# TER
+## 1. Dx parametric
+diff <- abs(9 - 11.93)
+sdDiff <- sqrt(mean(c(7.58^2,9.8^2)))
+ES = diff/sdDiff; 
+pwr.t.test(d = ES, sig.level = 0.05, power = 0.8, type = "two.sample")
+
+## 2. Sex parametric
+diff <- abs(11.54 - 8.41)
+sdDiff <- sqrt(mean(c(9.87^2,6.36^2)))
+ES = diff/sdDiff; 
+pwr.t.test(d = ES, sig.level = 0.05, power = 0.8, type = "two.sample")
+
+## 3. BH parametric (C vs D)
+diff <- abs(8.31 - 14.83)
+sdDiff <- sqrt(mean(c(4.05^2,9.85^2)))
+ES = diff/sdDiff; 
+pwr.t.test(d = ES, sig.level = 0.05, power = 0.8, type = "two.sample")
+
+## 4. BH parametric (M vs D)
+diff <- abs(2.08 - 14.83)
+sdDiff <- sqrt(mean(c(1.78^2,9.85^2)))
+ES = diff/sdDiff; 
+pwr.t.test(d = ES, sig.level = 0.05, power = 0.8, type = "two.sample")
+
+## 4. Interaction parametric (IBS-F vs HC-F)
+diff <- abs(8.7 - 17.21)
+sdDiff <- sqrt(mean(c(8.16^2,12.27^2)))
+ES = diff/sdDiff; 
+pwr.t.test(d = ES, sig.level = 0.05, power = 0.8, type = "two.sample")
+```
+
+```{r}
+# Flux
+## 1. Dx parametric
+diff <- abs(28.15 - 23.6)
+sdDiff <- sqrt(mean(c(19.89^2,15.96^2)))
+ES = diff/sdDiff; 
+pwr.t.test(d = ES, sig.level = 0.05, power = 0.8, type = "two.sample")
+
+## 2. Sex parametric
+diff <- abs(26.51 - 27.31)
+sdDiff <- sqrt(mean(c(10.86^2,24.11^2)))
+ES = diff/sdDiff; 
+pwr.t.test(d = ES, sig.level = 0.05, power = 0.8, type = "two.sample")
+
+## 3. BH parametric (C vs D)
+diff <- abs(20.85 - 44.71)
+sdDiff <- sqrt(mean(c(7.06^2,33.81^2)))
+ES = diff/sdDiff; 
+pwr.t.test(d = ES, sig.level = 0.05, power = 0.8, type = "two.sample")
+
+## 4. BH parametric (M vs D)
+diff <- abs(29.64 - 44.71)
+sdDiff <- sqrt(mean(c(10.7^2,33.81^2)))
+ES = diff/sdDiff; 
+pwr.t.test(d = ES, sig.level = 0.05, power = 0.8, type = "two.sample")
+
+## 4. Interaction parametric (IBS-F vs HC-F)
+diff <- abs(23.92 - 42.07)
+sdDiff <- sqrt(mean(c(9.22^2,NA^2))) # just one data point on HCF flux
+# ES = diff/sdDiff; 
+# pwr.t.test(d = ES, sig.level = 0.05, power = 0.8, type = "two.sample")
+```
+
+# Plots
+```{r, Plots, echo = FALSE}
+pList <- list()
+for (i in 4:6)
+  {
+  pList[[i]] <- ggplot(us1, aes(x = us1[,1], y = us1[,i], color = us1[,1])) +   
+    geom_boxplot(outlier.colour = NA) + geom_jitter() + labs(x = colnames(us1)[1], y =
+                                                               colnames(us1)[i])
+ }
+ print(pList)
+ 
+ pList <- list()
+ 
+for (i in 4:6)
+  {
+  pList[[i]] <- ggplot(us1, aes(x = us1[,2], y = us1[,i], color = us1[,2])) +   
+    geom_boxplot(outlier.colour = NA) + geom_jitter() + labs(x = colnames(us1)[2], y =
+                                                               colnames(us1)[i])
+ }
+ print(pList)
+ 
+ for (i in 4:6)
+  {
+  pList[[i]] <- ggplot(us1, aes(x = us1[,3], y = us1[,i], color = us1[,3])) +   
+    geom_boxplot(outlier.colour = NA) + geom_jitter() + labs(x = colnames(us1)[3], y =
+                                                               colnames(us1)[i])
+ }
+ print(pList)
+ 
+ for (i in 4:6)
+  {
+  pList[[i]] <- ggplot(us1, aes(x = us1[,7], y = us1[,i], color = us1[,7])) +   
+    geom_boxplot(outlier.colour = NA) + geom_jitter() + labs(x = colnames(us1)[7], y =
+                                                               colnames(us1)[i])
+ }
+ print(pList)
+
+for (i in c(1:3,7))
+  for (j in 4:6) {
+    ggsave(
+      ggplot(us1, aes(x = us1[,i], y = us1[,j], color = us1[,i])) + geom_boxplot(outlier.colour = NA) + geom_jitter() + labs(x = colnames(us1)[i], y = colnames(us1)[j]), file = paste(colnames(us1)[i],paste(colnames(us1)[j],"png", sep = "."),sep = "_"), height = 4,width = 4, units = "in"
+           )
+  }
+
+```
+
+##########################################################
+#Non parametric descriptive statistics # Calculating sample size using these is not recommended.
+```{r}
+DxMedian <- cast(mdata, Dx~variable, median, na.rm = TRUE)
+DxMedian[,2:4] <- round(DxMedian[,2:4],2)
+DxIqr <- cast(mdata, Dx~variable, IQR, na.rm = TRUE)
+DxIqr[,2:4] <- round(DxIqr[,2:4],2)
+dfStatsNonPar <-  matrix(NA, nrow=2, ncol = 4)
+row.names(dfStatsNonPar) <- DxMedian[,1]
+colnames(dfStatsNonPar) <- colnames(DxMedian)
+for ( i in 1:2){
+  for (j in 2:4) { 
+    dfStatsNonPar[i,j] <- paste(DxMedian[i,j],"(",DxIqr[i,j],")", sep = "")
+    }
+}
+kable(t(dfStatsNonPar), caption = "summary statistics Nonparametric Dx")
+```
+
+###############################################################
+############# v2 #############################################
+# bowel habit X sex interaction
+## Females 
+```{r}
+usF <- subset(us, us$Gender=="F"); dim(usF)
+
+# Differences between IBS HC;
+usF$Dx <- factor(usF$Dx)
+comb1 <- expand.grid(names(usF[,c(6:8)]),colnames(usF)[1])
+
+models <- lapply(paste(comb1[,1],comb1[,2], sep = "~"), formula)
+res.models <- lapply(models, FUN = function(x) {wilcox.test(formula = x, data = usF)})
+# names(res.models) <- paste(comb1[,1],comb1[,2], sep = "~")
+resDf <- round(matrix(t(data.frame(lapply(res.models, FUN = w_p))),nrow=3, ncol=1),3)
+colnames(resDf) <- colnames(usF)[1]
+row.names(resDf) <- names(usF[,c(6:8)])
+resDf
+kable(resDf, caption = "Association between IBS status in women plasma donors and  mouse permreability")
+
+
+# Differences between C-D;
+usCD <- subset(usF, usF$BH_screen=="C"| usF$BH_screen=="D")
+usCD$BH_screen <- factor(usCD$BH_screen)
+comb1 <- expand.grid(names(usCD[,c(6:8)]),colnames(usCD)[4])
+
+models <- lapply(paste(comb1[,1],comb1[,2], sep = "~"), formula)
+res.models <- lapply(models, FUN = function(x) {wilcox.test(formula = x, data = usCD)})
+# names(res.models) <- paste(comb1[,1],comb1[,2], sep = "~")
+resDf <- round(matrix(t(data.frame(lapply(res.models, FUN = w_p))),nrow=3, ncol=1),3)
+colnames(resDf) <- colnames(usCD)[4]
+row.names(resDf) <- names(usCD[,c(6:8)])
+resDf
+kable(resDf, caption = "Association of bowel Habits in female plasma donors and  mouse interstinal permreability")
+
+# Differences between C-N;
+usCN <- subset(usF, usF$BH_screen=="C"| usF$BH_screen=="N")
+usCN$BH_screen <- factor(usCN$BH_screen)
+comb1 <- expand.grid(names(usCN[,c(6:8)]),colnames(usCN)[4])
+
+models <- lapply(paste(comb1[,1],comb1[,2], sep = "~"), formula)
+res.models <- lapply(models, FUN = function(x) {wilcox.test(formula = x, data = usCN)})
+# names(res.models) <- paste(comb1[,1],comb1[,2], sep = "~")
+resDf <- round(matrix(t(data.frame(lapply(res.models, FUN = w_p))),nrow=3, ncol=1),3)
+colnames(resDf) <- colnames(usCN)[4]
+row.names(resDf) <- names(usCN[,c(6:8)])
+resDf
+kable(resDf, caption = "Association between Bowel Habits C and N and  mouse permreability within Females")
+
+# Differences between D-N;
+usDN <- subset(usF, usF$BH_screen=="D"| usF$BH_screen=="N")
+usDN$BH_screen <- factor(usDN$BH_screen)
+comb1 <- expand.grid(names(usDN[,c(6:8)]),colnames(usDN)[4])
+
+models <- lapply(paste(comb1[,1],comb1[,2], sep = "~"), formula)
+res.models <- lapply(models, FUN = function(x) {wilcox.test(formula = x, data = usDN)})
+# names(res.models) <- paste(comb1[,1],comb1[,2], sep = "~")
+resDf <- round(matrix(t(data.frame(lapply(res.models, FUN = w_p))),nrow=3, ncol=1),3)
+colnames(resDf) <- colnames(usDN)[4]
+row.names(resDf) <- names(usDN[,c(6:8)])
+resDf
+kable(resDf, caption = "Association between Bowel Habits D and N and  mouse permreability within Females")
+```
+
+## Males 
+```{r}
+usM <- subset(us, us$Gender=="M"); dim(usM)
+
+# Differences between IBS HC;
+usM$Dx <- factor(usM$Dx)
+comb1 <- expand.grid(names(usM[,c(6:8)]),colnames(usM)[1])
+
+models <- lapply(paste(comb1[,1],comb1[,2], sep = "~"), formula)
+res.models <- lapply(models, FUN = function(x) {wilcox.test(formula = x, data = usM)})
+# names(res.models) <- paste(comb1[,1],comb1[,2], sep = "~")
+resDf <- round(matrix(t(data.frame(lapply(res.models, FUN = w_p))),nrow=3, ncol=1),3)
+colnames(resDf) <- colnames(usM)[1]
+row.names(resDf) <- names(usM[,c(6:8)])
+kable(resDf, caption = "Association between Dx and  mouse permreability within Males")
+resDf
+
+# Differences between C-D;
+usCD <- subset(usM, usM$BH_screen=="C"| usM$BH_screen=="D")
+usCD$BH_screen <- factor(usCD$BH_screen)
+comb1 <- expand.grid(names(usCD[,c(6:8)]),colnames(usCD)[4])
+
+models <- lapply(paste(comb1[,1],comb1[,2], sep = "~"), formula)
+res.models <- lapply(models, FUN = function(x) {wilcox.test(formula = x, data = usCD)})
+# names(res.models) <- paste(comb1[,1],comb1[,2], sep = "~")
+resDf <- round(matrix(t(data.frame(lapply(res.models, FUN = w_p))),nrow=3, ncol=1),3)
+colnames(resDf) <- colnames(usCD)[4]
+row.names(resDf) <- names(usCD[,c(6:8)])
+kable(resDf, caption = "Association between Bowel Habits C and D and  mouse permreability within Males")
+resDf
+# Differences between C-N;
+usCN <- subset(usM, usM$BH_screen=="C"| usM$BH_screen=="N")
+usCN$BH_screen <- factor(usCN$BH_screen)
+comb1 <- expand.grid(names(usCN[,c(6:8)]),colnames(usCN)[4])
+
+models <- lapply(paste(comb1[,1],comb1[,2], sep = "~"), formula)
+res.models <- lapply(models, FUN = function(x) {wilcox.test(formula = x, data = usCN)})
+# names(res.models) <- paste(comb1[,1],comb1[,2], sep = "~")
+resDf <- round(matrix(t(data.frame(lapply(res.models, FUN = w_p))),nrow=3, ncol=1),3)
+colnames(resDf) <- colnames(usCN)[4]
+row.names(resDf) <- names(usCN[,c(6:8)])
+kable(resDf, caption = "Association between Bowel Habits C and N and  mouse permreability within Males")
+resDf
+# Differences between D-N;
+usDN <- subset(usM, usM$BH_screen=="D"| usM$BH_screen=="N")
+usDN$BH_screen <- factor(usDN$BH_screen)
+comb1 <- expand.grid(names(usDN[,c(6:8)]),colnames(usDN)[4])
+
+models <- lapply(paste(comb1[,1],comb1[,2], sep = "~"), formula)
+res.models <- lapply(models, FUN = function(x) {wilcox.test(formula = x, data = usDN)})
+# names(res.models) <- paste(comb1[,1],comb1[,2], sep = "~")
+resDf <- round(matrix(t(data.frame(lapply(res.models, FUN = w_p))),nrow=3, ncol=1),3)
+colnames(resDf) <- colnames(usDN)[4]
+row.names(resDf) <- names(usDN[,c(6:8)])
+kable(resDf, caption = "Association between Bowel Habits D and N and  mouse permreability within Males")
+resDf
+
+```
+
+# Plots interaction
+```{r}
+### Females
+library(ggplot2)
+for (i in c(1,4))
+  for (j in 6:8) {
+    ggsave(
+      ggplot(usF, aes(x = usF[,i], y = usF[,j], color = usF[,i])) + geom_boxplot(outlier.colour = NA) + geom_jitter() + labs(x = colnames(usF)[i], y = colnames(usF)[j]), file = paste(colnames(usF)[i],paste(colnames(usF)[j],"Female.png", sep = "."),sep = "_"), height = 4,width = 4, units = "in"
+           )
+  }
+
+### Males
+library(ggplot2)
+for (i in c(1,4))
+  for (j in 6:8) {
+    ggsave(
+      ggplot(usM, aes(x = usM[,i], y = usM[,j], color = usM[,i])) + geom_boxplot(outlier.colour = NA) + geom_jitter() + labs(x = colnames(usM)[i], y = colnames(usM)[j]), file = paste(colnames(usM)[i],paste(colnames(usM)[j],"Male.png", sep = "."),sep = "_"), height = 4,width = 4, units = "in"
+           )
+  }
+### 
+ggplot(us1, aes(x=dxSexInt,y=Isc,color = dxSexInt)) + geom_boxplot(outlier.shape = NA) +geom_jitter(aes(color = us1$dxSexInt))
+ggplot(us1, aes(x=dxSexInt,y=TER,color = dxSexInt)) + geom_boxplot(outlier.shape = NA) +geom_jitter(aes(color = us1$dxSexInt))
+ggplot(us1, aes(x=dxSexInt,y=Flux,color = dxSexInt)) + geom_boxplot(outlier.shape = NA) +geom_jitter(aes(color = us1$dxSexInt))
+```
+
+```{r}
+
+# BH-Sex int
+us1 <- us[,-c(3,5)]
+us1$BHSexInt <- interaction(us1$BH_screen,us1$Gender)
+us1 <- us1[,c(4,5,6,8)]
+mdata <- melt(us1, id="BHSexInt") 
+IntMean <- cast(mdata, BHSexInt~variable, mean, na.rm = TRUE)
+IntMean[,2:4] <- round(IntMean[,2:4],2)
+IntSd <- cast(mdata, BHSexInt~variable, sd, na.rm = TRUE)
+IntSd[,2:4] <- round(IntSd[,2:4],2)
+
+dfStatsPar <-  matrix(NA, nrow=8, ncol = 4)
+row.names(dfStatsPar) <- IntMean[,1]
+colnames(dfStatsPar) <- colnames(IntMean)
+for ( i in 1:8){
+  for (j in 2:4) { 
+    dfStatsPar[i,j] <- paste(IntMean[i,j],"(",IntSd[i,j],")", sep = "")
+    }
+}
+kable(t(dfStatsPar), caption = "summary statistics parametric BH-Sex Interaction")
+
+```
+# Sample size based on BH -sex interaction
+```{r}
+
+BHSexInt	C.F	          D.F	        M.F	          N.F	          C.M	          D.M	          N.M	        U.M
+Isc	      78.98(60.62)	138.35(NA)	49.17(29.13)	119.32(39.09)	29.34(56.04)	101.36(37.77)	51.3(35.97)	44.83(NA)
+TER	      -8.52(5.08)	  -22.49(NA)	-2.08(1.78)	  -17.21(12.27)	-8(3.71)	    -12.28(10.32)	-6.64(2.4)	-2.9(NA)
+Flux	    19.61(9.68)	  25.4(NA)	  29.64(10.7)	  141.2(107.55)	22.7(0.83)	  227.27(300.92)	17.45(12.44)	12.01(NA)
+# Isc
+## 1. C.F vs N.F parametric
+diff <- abs(78.98 - 119.32)
+sdDiff <- sqrt(mean(c(60.62^2,39.09^2)))
+ES = diff/sdDiff; 
+pwr.t.test(d = ES, sig.level = 0.05, power = 0.8, type = "two.sample")
+# n= 26
+## 2. D.F vs N.F parametric
+# SD NA 
+## 3. M.F vs N.F parametric
+diff <- abs(78.98 - 119.32)
+sdDiff <- sqrt(mean(c(29.13^2,39.09^2)))
+ES = diff/sdDiff; 
+pwr.t.test(d = ES, sig.level = 0.05, power = 0.8, type = "two.sample")
+# n=12
+
+# TER
+## 1. C.F vs N.F parametric
+diff <- abs(-8.52 - -17.21)
+sdDiff <- sqrt(mean(c(5.08^2,12.27^2)))
+ES = diff/sdDiff; 
+pwr.t.test(d = ES, sig.level = 0.05, power = 0.8, type = "two.sample")
+# n=19
+## 2. D.F vs N.F parametric
+# SD NA 
+## 3. M.F vs N.F parametric
+diff <- abs(-2.08 - -17.21)
+sdDiff <- sqrt(mean(c(1.78^2,12.27^2)))
+ES = diff/sdDiff; 
+pwr.t.test(d = ES, sig.level = 0.05, power = 0.8, type = "two.sample")
+# n=6
+
+# Flux
+## 1. C.F vs N.F parametric
+diff <- abs(19.61 - 141.2)
+sdDiff <- sqrt(mean(c(9.68^2,107.55^2)))
+ES = diff/sdDiff; 
+pwr.t.test(d = ES, sig.level = 0.05, power = 0.8, type = "two.sample")
+# n=7
+## 2. D.F vs N.F parametric
+# SD NA 
+## 3. M.F vs N.F parametric
+diff <- abs(29.64 - 141.2)
+sdDiff <- sqrt(mean(c(10.7^2,107.55^2)))
+ES = diff/sdDiff; 
+pwr.t.test(d = ES, sig.level = 0.05, power = 0.8, type = "two.sample")
+# n=8.4
+
+```
+# within men
+```{r}
+
+# BHSexInt	C.F	          D.F	        M.F	          N.F	          C.M	          D.M	          N.M	        U.M
+# Isc	      78.98(60.62)	138.35(NA)	49.17(29.13)	119.32(39.09)	29.34(56.04)	101.36(37.77)	51.3(35.97)	44.83(NA)
+# TER	      -8.52(5.08)	  -22.49(NA)	-2.08(1.78)	  -17.21(12.27)	-8(3.71)	    -12.28(10.32)	-6.64(2.4)	-2.9(NA)
+# Flux	    19.61(9.68)	  25.4(NA)	  29.64(10.7)	  141.2(107.55)	22.7(0.83)	  227.27(300.92)	17.45(12.44)	12.01(NA)
+# Isc
+## 1. C.M vs N.M parametric
+diff <- abs(29.34 - 51.3)
+sdDiff <- sqrt(mean(c(56.04^2,35.97^2)))
+ES = diff/sdDiff; 
+pwr.t.test(d = ES, sig.level = 0.05, power = 0.8, type = "two.sample")
+# n= 73
+## 2. D.F vs N.F parametric
+diff <- abs(101.36 - 51.3)
+sdDiff <- sqrt(mean(c(37.77^2,35.97^2)))
+ES = diff/sdDiff; 
+pwr.t.test(d = ES, sig.level = 0.05, power = 0.8, type = "two.sample")
+# n=10
+
+# TER
+## 1. C.M vs N.M parametric
+diff <- abs(-8 - -6.64)
+sdDiff <- sqrt(mean(c(3.71^2,2.4^2)))
+ES = diff/sdDiff; 
+pwr.t.test(d = ES, sig.level = 0.05, power = 0.8, type = "two.sample")
+# n=83
+## 2. D.M vs N.M parametric
+diff <- abs(-12.28 - -6.64)
+sdDiff <- sqrt(mean(c(10.32^2,2.4^2)))
+ES = diff/sdDiff; 
+pwr.t.test(d = ES, sig.level = 0.05, power = 0.8, type = "two.sample")
+# n=29
+
+
+# Flux
+## 1. C.M vs N.M parametric
+diff <- abs(22.7 - 17.45)
+sdDiff <- sqrt(mean(c(0.83^2,12.44^2)))
+ES = diff/sdDiff; 
+pwr.t.test(d = ES, sig.level = 0.05, power = 0.8, type = "two.sample")
+# n=45
+
+## 3. D.M vs N.M parametric
+diff <- abs(227.27 - 17.45)
+sdDiff <- sqrt(mean(c(300.92^2,12.44^2)))
+ES = diff/sdDiff; 
+pwr.t.test(d = ES, sig.level = 0.05, power = 0.8, type = "two.sample")
+# n=8.4
+```
+# Dx-Sex int
+```{r}
+## us1 <- us[,-c(3,5)]
+us1$dxSexInt <- interaction(us1$Dx,us1$Gender)
+us1 <- us1[,c(4,5,6,7)]
+mdata <- melt(us1, id="dxSexInt") 
+IntMean <- cast(mdata, dxSexInt~variable, mean, na.rm = TRUE)
+IntMean[,2:4] <- round(IntMean[,2:4],2)
+IntSd <- cast(mdata, dxSexInt~variable, sd, na.rm = TRUE)
+IntSd[,2:4] <- round(IntSd[,2:4],2)
+
+IntVar <- cast(mdata, dxSexInt~variable, var, na.rm = TRUE)
+IntVar[,2:4] <- round(IntVar[,2:4],2)
+
+dfStatsPar <-  matrix(NA, nrow=4, ncol = 4)
+row.names(dfStatsPar) <- IntMean[,1]
+colnames(dfStatsPar) <- colnames(IntMean)
+for ( i in 1:4){
+  for (j in 2:4) { 
+    dfStatsPar[i,j] <- paste(IntMean[i,j],"(",IntSd[i,j],")", sep = "")
+    }
+}
+kable(t(dfStatsPar), caption = "summary statistics parametric Dx-Sex Interaction")
+
+```
+# sample size
+```{r}
+
+# dxSexInt	HC.F	          IBS.F	          HC.M	        IBS.M
+# Isc	      119.32(39.09)	  78.94(51.96)	  51.3(35.97)	  67.93(50.71)
+# TER	      -17.21(12.27)	  -8.7(8.16)	    -6.64(2.4)	  -9.29(7.72)
+# Flux	    141.2(107.55)	  23.92(9.22)	    17.45(12.44)	123.2(221.88)
+
+# 1. IBS.F vs HC.F parametric
+
+## Isc	
+diff <- abs(78.94 - 119.32)
+sdDiff <- sqrt(mean(c(51.96^2,39.09^2)))
+ES = diff/sdDiff; 
+pwr.t.test(d = ES, sig.level = 0.05, power = 0.8, type = "two.sample")
+# n= 21
+
+## TER	
+diff <- abs(-8.7 - -17.21)
+sdDiff <- sqrt(mean(c(8.16^2,12.27^2)))
+ES = diff/sdDiff; 
+pwr.t.test(d = ES, sig.level = 0.05, power = 0.8, type = "two.sample")
+# n= 24
+
+## Flux	
+diff <- abs(23.92 - 141.2)
+sdDiff <- sqrt(mean(c(9.22^2,107.55^2)))
+ES = diff/sdDiff; 
+pwr.t.test(d = ES, sig.level = 0.05, power = 0.8, type = "two.sample")
+# n= 8
+
+# dxSexInt	HC.F	          IBS.F	          HC.M	        IBS.M
+# Isc	      119.32(39.09)	  78.94(51.96)	  51.3(35.97)	  67.93(50.71)
+# TER	      -17.21(12.27)	  -8.7(8.16)	    -6.64(2.4)	  -9.29(7.72)
+# Flux	    141.2(107.55)	  23.92(9.22)	    17.45(12.44)	123.2(221.88)
+## 2. IBS.M vs HC.M parametric
+## Isc	
+diff <- abs(67.93 - 51.3)
+sdDiff <- sqrt(mean(c(50.71^2,35.97^2)))
+ES = diff/sdDiff; 
+pwr.t.test(d = ES, sig.level = 0.05, power = 0.8, type = "two.sample")
+# n= 110
+
+## TER	
+diff <- abs(-9.29 - -6.64)
+sdDiff <- sqrt(mean(c(7.72^2,2.4^2)))
+ES = diff/sdDiff; 
+pwr.t.test(d = ES, sig.level = 0.05, power = 0.8, type = "two.sample")
+# n= 74
+
+## Flux	
+diff <- abs(123.2 - 17.45)
+sdDiff <- sqrt(mean(c(221.88^2,12.44^2)))
+ES = diff/sdDiff; 
+pwr.t.test(d = ES, sig.level = 0.05, power = 0.8, type = "two.sample")
+# n= 35
+
+```
+```{r}
+# Interaction p value
+
+summary(lm(us$Isc~ us$Dx * us$Gender))
+summary(aov(us1$TER~us1$dxSexInt))
+summary(aov(us1$Flux~us1$dxSexInt))
+```
+```{r}
+# HC men-women
+# IBS men-women
+
+usHcF  <-  subset(us1, us1$dxSexInt=="HC.F")
+usHcM  <-  subset(us1,us1$dxSexInt=="HC.M")
+usibsF  <-  subset(us1, us1$dxSexInt=="IBS.F")
+usibsM <- subset(us1,us1$dxSexInt=="IBS.M")
+usHc_diff <- usHcF[,1:3]-usHcM[,1:3]
+usIbs_diff <- usibsF[,1:3]-usibsM[,1:3]
+```
+
+```{r}
+# BH 
+
+us1 <- us[,c(4,6,7,8)]
+mdata <- melt(us1, id="BH_screen") 
+IntMean <- cast(mdata, BH_screen~variable, mean, na.rm = TRUE)
+IntMean[,2:4] <- round(IntMean[,2:4],2)
+IntMean <- IntMean[1:4,]
+IntSd <- cast(mdata, BH_screen~variable, sd, na.rm = TRUE)
+IntSd[,2:4] <- round(IntSd[,2:4],2)
+IntSd <- IntSd[1:4,]
+dfStatsPar <-  matrix(NA, nrow=4, ncol = 4)
+row.names(dfStatsPar) <- IntMean[,1]
+colnames(dfStatsPar) <- colnames(IntMean)
+for ( i in 1:4){
+  for (j in 2:4) { 
+    dfStatsPar[i,j] <- paste(IntMean[i,j],"(",IntSd[i,j],")", sep = "")
+    }
+}
+kable(t(dfStatsPar), caption = "summary statistics parametric BH")
+```
+

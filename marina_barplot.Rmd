@@ -1,0 +1,367 @@
+#` ---
+#` Author Swapna Joshi
+#` Title: Marina venn and barplots
+#` Date:5262016
+#` ---
+
+```{r, message=FALSE} 
+
+library(ggplot2)
+library(VennDiagram)
+library(heatmap.plus)
+library(RColorBrewer)
+library(matlab)
+```
+##################### bar plot with color and space
+```{r, message=FALSE} 
+Enrichment<-c(0.87,0.87,0.54, 0, 0.69,0.67,0.33)
+
+
+KEGG_Pathway <- c("a","b","c","d","e","f","h")
+counts <- as.data.frame(cbind(Enrichment,KEGG_Pathway))
+counts$KEGG_Pathway <- factor(KEGG_Pathway, 
+                       levels=names(rev(sort(table(KEGG_Pathway)))))
+
+# 
+counts$val1 <- c("high","high","high", "NA","low","low","low")
+rhg_cols <- c(high="#8B0000", low="#CD5C5C", 'NA' = "#e9e9e9")
+
+# dodge <- position_dodge(width = 0.5)
+bar <- ggplot(data = counts, aes(x = KEGG_Pathway, y = Enrichment, fill = factor(val1)))  
+bar1<-bar +  geom_bar(width = 0.7, stat="identity") + scale_fill_manual(values = rhg_cols) + coord_flip()
+# + scale_x_discrete(breaks=counts$KEGG_Pathway[nchar(as.character(counts$KEGG_Pathway))!=1])
+ggsave(bar1, file = "C:/Users/swapnajoshi/Documents/UCLA_research/Marina_microarray_01082015/phosphorus metabolic process_GO.png")
+#+ fig.width=5, fig.height=5
+bar1
+```
+##################### bar plot with color and space
+```{r, message=FALSE} 
+Enrichment<-c(0.88,  0.86, 0.46, 0.18,0, 0.72, 0.52,0.39)
+
+
+KEGG_Pathway <- c("a","b","c","d","e","f", "g", "h")
+counts <- as.data.frame(cbind(Enrichment,KEGG_Pathway))
+counts$KEGG_Pathway <- factor(KEGG_Pathway, 
+                              levels=names(rev(sort(table(KEGG_Pathway)))))
+
+# 
+counts$val1 <- c("high","high","high","high","NA","low","low", "low")
+rhg_cols <- c(high="#191970", low="#6A5ACD", 'NA' = "#e9e9e9")
+
+# dodge <- position_dodge(width = 0.5)
+bar <- ggplot(data = counts, aes(x = KEGG_Pathway, y = Enrichment, fill = factor(val1)))  
+bar1 <- bar +  geom_bar(width = 0.7, stat="identity") + scale_fill_manual(values = rhg_cols) + coord_flip()
+# + scale_x_discrete(breaks=counts$KEGG_Pathway[nchar(as.character(counts$KEGG_Pathway))!=1])
+ggsave(bar1, file = "C:/Users/swapnajoshi/Documents/UCLA_research/Marina_microarray_01082015/integral to plasma membrane_GO.png" )
+#+ fig.width=5, fig.height=5
+bar1
+```
+# venn diagrams
+```{r, message=FALSE} 
+# grid.newpage()
+plot.new()
+png("C:/Users/swapnajoshi/Documents/UCLA_research/Marina_microarray_01082015/vennDiagram_chiseq1.png")
+draw.pairwise.venn(36897, 28543, 13160, lty = rep("blank",2), fill = c("blue", "red"), cex = c(2,2,2),col = rep("black", 2), lwd = rep(2,2),alpha = rep(0.5, 2), cat.pos = c(0, 0), cat.dist = rep(0.025, 2), ext.text =  TRUE)        
+dev.off()
+#+ fig.width=5, fig.height=5
+draw.pairwise.venn(36897, 28543, 13160, lty = rep("blank",2), fill = c("blue", "red"), cex = c(2,2,2),col = rep("black", 2), lwd = rep(2,2),alpha = rep(0.5, 2), cat.pos = c(0, 0), cat.dist = rep(0.025, 2), ext.text =  TRUE)        
+
+png("C:/Users/swapnajoshi/Documents/UCLA_research/Marina_microarray_01082015/vennDiagram_chiseq2.png")
+draw.pairwise.venn(19189, 16912, 14837, lty = rep("blank",2), fill = c("blue", "red"), cex = c(2,2,2),col = rep("black", 2), lwd = rep(2,2),alpha = rep(0.5, 2), cat.pos = c(0, 0), cat.dist = rep(0.025, 2), ext.text =  TRUE)        
+dev.off()
+#+ fig.width=5, fig.height=5
+draw.pairwise.venn(19189, 16912, 14837, lty = rep("blank",2), fill = c("blue", "red"), cex = c(2,2,2),col = rep("black", 2), lwd = rep(2,2),alpha = rep(0.5, 2), cat.pos = c(0, 0), cat.dist = rep(0.025, 2), ext.text =  TRUE)        
+```
+# 09-06-2016
+```{r, message=FALSE} 
+Enrichment<-c(0.93,
+              0.78,
+              0.77,
+              0, 1.07,
+              0.86,
+              0.65,
+              0.65
+)
+
+
+KEGG_Pathway <- c("a","b","c","d","e","f", "g", "h")
+counts <- as.data.frame(cbind(Enrichment,KEGG_Pathway))
+counts$KEGG_Pathway <- factor(KEGG_Pathway, 
+                              levels=names(rev(sort(table(KEGG_Pathway)))))
+
+# 
+counts$val1 <- c("high","high","high","NA","low","low","low", "low")
+rhg_cols <- c(high="#8B0000", low="#CD5C5C", 'NA' = "#e9e9e9")
+
+# dodge <- position_dodge(width = 0.5)
+bar <- ggplot(data = counts, aes(x = KEGG_Pathway, y = Enrichment, fill = factor(val1)))  
+bar1 <- bar +  geom_bar(width = 0.7, stat="identity") + scale_fill_manual(values = rhg_cols) + coord_flip()
+# + scale_x_discrete(breaks=counts$KEGG_Pathway[nchar(as.character(counts$KEGG_Pathway))!=1])
+ggsave(bar1, file = "C:/Users/swapnajoshi/Documents/UCLA_research/Marina_microarray_01082015/transcription from RNA plot2 promoter.png" )
+#+ fig.width=5, fig.height=5
+bar1
+```
+#################
+# Marina analysis 01302017
+
+# heatmap group 1 vs Group 2
+# heatmap group 1 vs Group 3
+```{r, message=FALSE} 
+
+setwd("C:/Users/swapnajoshi/Documents/UCLA_research/Marina_microarray_01082015/marina_analysis_01262017/Swapna_analysis_01302017/")
+ge1 <- read.delim("RMA-normalized expression values.txt", sep = "\t", row.names = 1)
+
+de1 <- read.delim("Group 2 vs Group 1 differentially expressed genes.txt", sep = "\t", row.names = 2)
+de.gr12 <- de1[de1$p.value.Group.2.vs..Group.1.<0.05, c(2,3,7,9),]; dim(de.gr12)
+# [1] 498   4
+de.gr13 <- de1[de1$p.value.Group.3.vs..Group.1.<0.05, c(2,3,13,15),]; dim(de.gr13)
+# [1] 352   4
+
+ge.de12 <- ge1[row.names(ge1)%in%row.names(de.gr12),c(1:4)]; dim(ge.de12)
+# [1] 498   4
+ge.de13 <- ge1[row.names(ge1)%in%row.names(de.gr13),c(1:2,5:6)]; dim(ge.de13)
+# [1] 352   4
+ge12.z<- apply(ge.de12, 1, scale) 
+row.names(ge12.z)<-colnames(ge.de12)
+ge12.zscore<-t(ge12.z)
+col.j<-jet.colors(75)
+
+# colnames(ge12.zscore)<-substr(colnames(ge12.zscore),3,12)
+png("12hm_hm3.png", bg="white", res=300, width=3000, height=3000)
+hv2<-heatmap.3(as.matrix(ge12.zscore),na.rm=TRUE,scale="none",  
+               		# RowSideColor=NA,
+               		# ColSideColors=NA,
+               		# col=col.j,
+               		zlim=c(-1.32,1.32),
+               Colv=NA,Rowv=T,
+               cexRow=1,cexCol=1,
+               # keep.dendro = NA,
+               main = paste("Heatmap", dim(ge12.zscore)[1],"Probes; ",dim(ge12.zscore)[2],"Samples"),
+               labRow=row.names(ge12.zscore)
+)
+dev.off()
+# order
+row.order <- rev(hv2$rowInd)
+#col.order <- colnames(tum.dic.pr1[ ,hv1$colInd])
+ge12.zscore.ord<-ge12.zscore[row.order,]
+names.ord <- de.gr12[row.names(ge12.zscore.ord),]
+
+ge13.z<- apply(ge.de13, 1, scale) 
+row.names(ge13.z)<-colnames(ge.de13)
+ge13.zscore<-t(ge13.z)
+col.j<-jet.colors(75)
+
+# colnames(ge12.zscore)<-substr(colnames(ge12.zscore),3,12)
+png("13hm_hm3.png", bg="white", res=300, width=3000, height=3000)
+hv2<-heatmap.3(as.matrix(ge13.zscore),na.rm=TRUE,scale="none",  
+               		# RowSideColor=NA,
+               		# ColSideColors=NA,
+               		# col=col.j,
+               		zlim=c(-1.32,1.32),
+               Colv=NA,Rowv=T,
+               cexRow=1,cexCol=1,
+               # keep.dendro = NA,
+               main = paste("Heatmap", dim(ge13.zscore)[1],"Probes; ",dim(ge13.zscore)[2],"Samples"),
+               labRow=row.names(ge13.zscore)
+)
+dev.off()
+```
+
+#venn diagrams
+
+```{r, message=FALSE} 
+# common samples
+#upregulated
+up12<- de.gr12[de.gr12[,4]>0,]
+dim(up12)[1]
+# [1] 272
+
+#downregulated
+down12<-de.gr12[de.gr12[,4]<0,]
+dim(down12)[1]
+# [1] 226
+
+
+#upregulated
+up13 <- de.gr13[de.gr13[,4]>0,]
+dim(up13)[1]
+# [1] 255
+
+#downregulated
+down13 <- de.gr13[de.gr13[,4]<0,]
+dim(down13)[1]
+# [1] 97
+
+# commonup
+upCom <- up12[up12[,1]%in%up13[,1],]
+dim(upCom)
+# [1] 236   4
+# commonDown
+downCom <- down12[down12[,1]%in%down13[,1],]
+dim(downCom)
+# 105   4
+
+# total com
+totCom <- rbind(upCom,downCom); dim(totCom)
+# all com
+# 236+105 = 341
+
+totCom.n <- totCom[,c(1,2)]
+write.csv(totCom, file= "Common12_13_02072017_12fc.csv")
+# If done direclty without separating up and down we have 374 common
+
+
+# grid.newpage()
+plot.new()
+png("vennDiagram_marina02062017_unscaled.png")
+draw.pairwise.venn(498, 352,341, lty = rep("blank",2), fill = c("blue", "red"), cex = c(2,2,2),col = rep("black", 2), lwd = rep(2,2),alpha = rep(0.5, 2), cat.pos = c(0, 0), cat.dist = rep(0.025, 2), ext.text =  TRUE, scaled = FALSE)        
+dev.off()
+
+```
+# 1/3/2018
+```{r}
+# install.packages("Vennerable", repos="http://R-Forge.R-project.org") 
+library(Vennerable)
+geneID <- read.csv("C:/Users/swapnajoshi-admin/Documents/GIT_workspace/otherPIprojects/Marina/Gene IDs.csv")
+geneIDList <- list(as.character(geneID[1:1377,1]),as.character(geneID[1:1606,2]),as.character(geneID[1:2518,3]), as.character(geneID[1:716,4]))
+names(geneIDList) <- c("SW480",    "5637",    "MIAPACA2", "MDAMB231")
+Vglist <- Venn(geneIDList)
+plot(Vglist, doWeights = FALSE,type = "ellipses")
+
+Vglist2 <- geneIDList[names(geneIDList)%in% c("SW480", "5637","MIAPACA2") ]
+Vglist2 <- Venn(Vglist2)
+plot(Vglist2, doWeights = TRUE,type = "circles")
+
+Vglist3 <- Venn(SetNames = c(" ", " "), Weight = c('01'= 914, '11'= 237,'10'= 458))
+ plot(Vglist3, doWeights = TRUE, type = "circles")
+```
+
+# barplot 6/13/2017
+
+```{r}
+
+Enrichment<-as.numeric(c(0.377,
+0.414,
+0.453,
+0.547,
+0.547,
+0.61,
+0.61,
+0.623,
+0.635,
+0.882,
+0.997,
+1.48,
+1.9,
+2.09,
+2.4,
+4.4))
+
+
+counts <- as.data.frame(cbind(Enrichment,KEGG_Pathway))
+counts$KEGG_Pathway <- factor(KEGG_Pathway, 
+                              levels=names(rev(sort(table(KEGG_Pathway)))))
+
+rhg_cols <- "cadetblue3"
+
+
+
+library(ggplot2)
+# dodge <- position_dodge(width = 0.5)
+counts$Enrichment <- as.numeric(Enrichment)
+bar <- ggplot(data = counts, aes(x = KEGG_Pathway, y = Enrichment, fill = factor(rhg_cols)))  
+bar1 <- bar +  geom_bar(width = 0.7, stat="identity") + scale_fill_manual(values = rhg_cols) + scale_y_continuous(breaks = round(seq(min(counts$Enrichment), max(counts$Enrichment), by = 0.5),1)) + coord_flip()
+
+# + scale_x_discrete(breaks=counts$KEGG_Pathway[nchar(as.character(counts$KEGG_Pathway))!=1])
+ggsave(bar1, file = "C:/Users/swapnajoshi/Documents/UCLA_research/Marina_microarray_01082015/marina_06132017/bar_plot1.png" )
+#+ fig.width=5, fig.height=5
+bar1
+
+```
+
+
+```{r, message=FALSE} 
+
+setwd("C:/Users/swapnajoshi-admin/Documents/GIT_workspace/otherPIprojects/Marina/marina_analysis_01262017/Swapna_analysis_01302017"); gly_u_d <- read.delim("Final Up and Down regul Glycolysis genes Heatmap.csv", sep = ",", row.names = 1); gly_u <- read.delim("Final Upregul Glycolysis genes Heatmap.csv", sep = ",", row.names = 1); lip_u_d <- read.delim("Final Lipid genes Heatmap.csv", sep = ",")
+
+load("C:/Users/swapnajoshi-admin/Documents/GIT_workspace/otherPIprojects/Marina/raw_data/silencing/Ing.kmt2d.silencing.eset.rda")
+ge1 <- eset
+
+list1 <- ge1[row.names(ge1)%in%row.names(gly_u_d),c(1:4)]; dim(list1)
+gly_u_d <- gly_u_d[row.names(list1),]
+# [1]13 4
+list2 <- ge1[row.names(ge1)%in%row.names(gly_u),c(1:4)]; dim(list2)
+# [1] 9   4
+lip_u_d <- lip_u_d[-5,]# duplicate
+row.names(lip_u_d) <- lip_u_d[,1]
+list3 <- ge1[row.names(ge1)%in%row.names(lip_u_d),c(1:4)]; dim(list3)
+# [1] 41  4
+
+
+l1.z<- apply(list1, 1, scale) 
+row.names(l1.z)<-colnames(list1)
+l1.zscore<-t(l1.z)
+col.j<-jet.colors(75)
+
+# colnames(ge12.zscore)<-substr(colnames(ge12.zscore),3,12)
+png("C:/Users/swapnajoshi-admin/Documents/GIT_workspace/otherPIprojects/Marina/marina_analysis_01262017/Swapna_analysis_01302017/marina_glycolysis_up_down_new.png", bg="white", res=300, width=3000, height=3000)
+hv2<-heatmap.3(as.matrix(l1.zscore),na.rm=TRUE,scale="none",  
+               		# RowSideColor=NA,
+               		# ColSideColors=NA,
+               		# col=col.j,
+               		# zlim=c(-1.32,1.32),
+               Colv=T,Rowv=T,
+               cexRow=1,cexCol=1,
+               # keep.dendro = NA,
+               main = paste("Heatmap", dim(l1.zscore)[1],"Probes; ",dim(l1.zscore)[2],"Samples"),
+               labRow=row.names(l1.zscore)
+)
+dev.off()
+
+ord1 <- l1.zscore[rev(hv2$rowInd),]
+gly_u_d1 <- gly_u_d[row.names(ord1),]
+
+l2.z<- apply(list2, 1, scale) 
+row.names(l2.z)<-colnames(list2)
+l2.zscore<-t(l2.z)
+
+png("C:/Users/swapnajoshi-admin/Documents/GIT_workspace/otherPIprojects/Marina/marina_analysis_01262017/Swapna_analysis_01302017/marina_glycolysis_up.new.png", bg="white", res=300, width=3000, height=3000)
+hv2<-heatmap.3(as.matrix(l2.zscore),na.rm=TRUE,scale="none",  
+               		# RowSideColor=NA,
+               		# ColSideColors=NA,
+               		# col=col.j,
+               		# zlim=c(-1.32,1.32),
+               Colv=T,Rowv=T,
+               cexRow=1,cexCol=1,
+               # keep.dendro = NA,
+               main = paste("Heatmap", dim(l2.zscore)[1],"Probes; ",dim(l2.zscore)[2],"Samples"),
+               labRow=row.names(l2.zscore)
+)
+dev.off()
+ord2 <- l2.zscore[rev(hv2$rowInd),]
+gly_u <- gly_u[row.names(ord2),]
+
+l3.z<- apply(list3, 1, scale) 
+row.names(l3.z)<-colnames(list3)
+l3.zscore<-t(l3.z)
+
+png("C:/Users/swapnajoshi-admin/Documents/GIT_workspace/otherPIprojects/Marina/marina_analysis_01262017/Swapna_analysis_01302017/marina_lipid_up.new.png", bg="white", res=300, width=3000, height=3000)
+hv2<-heatmap.3(as.matrix(l3.zscore),na.rm=TRUE,scale="none",  
+               		# RowSideColor=NA,
+               		# ColSideColors=NA,
+               		# col=col.j,
+               		# zlim=c(-1.32,1.32),
+               Colv=T,Rowv=T,
+               cexRow=1,cexCol=1,
+               # keep.dendro = NA,
+               main = paste("Heatmap", dim(l3.zscore)[1],"Probes; ",dim(l3.zscore)[2],"Samples"),
+               labRow=row.names(l3.zscore)
+)
+dev.off()
+
+ord3 <- l3.zscore[rev(hv2$rowInd),]
+lip_u_d <- lip_u_d[row.names(ord3),]
+```
+
+```
+

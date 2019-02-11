@@ -1,0 +1,234 @@
+---
+title: "HLavertsy_code_V1.Rmd"
+author: "Swapna Mahurkar-Joshi"
+date: "October 9, 2017"
+output:
+  word_document: default
+  html_document: default
+---
+```{r Code description}
+# This is the code to perform clinical trial analysis at 3 mon and 6 months for the following GE data comparisons
+
+# 3mo-baseline (pairwise sample)
+# 6mo-baseline (pairwise sample)
+# responders vs non-responders baseline
+# responders vs non-responders 3 months
+# responders vs non-responders 6 months
+# converts vs non-converts??
+##non-responder at 6 months - responder at 3 months 
+##responder at 6 months -  non-responder at 3 months
+
+# outcomes or questions of interest: 
+  # DE gene numbers from above comparisons
+  # Pathways from the genes
+  # what changed in people that converted from responders to    non-responders and vice-versa. 
+# code is adapted from https://www3.nd.edu/~steve/Rcourse/Lecture10v1.pdf
+```
+
+## Load packages
+
+```{r, warning=FALSE, message=FALSE}
+
+# source("https://bioconductor.org/biocLite.R")
+# biocLite("hgu133plus2.db")
+library(affy)   # Affymetrix pre-processing
+library(limma)  # two-color pre-processing; differential
+library(hgu133plus2.db)
+library("AnnotationDbi")
+```                
+## import "phenotype" data, describing the experimental design
+
+```{r}
+
+CelPath <- "C:/Users/swapnajoshi-admin/Documents/GIT_workspace/otherPIprojects/HLavretsky_clinicalTrial/data"
+phenoData <- read.csv(paste(CelPath , "Namenda_samples_09192017.csv", sep = "/" ), row.names= 1)
+row.names(phenoData) <- paste(row.names(phenoData),"CEL", sep=".")
+row.names(phenoData) <- gsub(" ", "", row.names(phenoData))
+
+```
+
+## RMA normalization
+
+```{r}
+setwd("C:/Users/swapnajoshi-admin/Documents/GIT_workspace/otherPIprojects/HLavretsky_clinicalTrial/data")
+dat1 <- ReadAffy()
+eset <- rma(dat1)
+write.exprs(eset,file="dataMat.txt")
+```
+
+# Annotation dataframe
+```{r}
+affyAn <- select(hgu133plus2.db, row.names(exprs(eset)), c("SYMBOL","ENTREZID", "GENENAME")) 
+affyAn <- affyAn[!duplicated(affyAn$PROBEID),]
+row.names(affyAn) <- affyAn[,1]
+affyAn$PROBEID <- NULL
+```
+
+# differential expression
+
+```{r}
+phenoData <- phenoData[sampleNames(eset),]
+all.equal(row.names(phenoData),sampleNames(eset))
+```
+
+# Combinations
+
+```{r}
+# post responders vs non responders at 3 months months
+# post responders vs non responders at 6 months months
+# pre responders vs non responders at 3 months months
+# pre responders vs non responders at 6 months months
+```
+
+# 3 months
+
+```{r}
+prePhenoData <- subset(phenoData, phenoData$TreatmentTimePoint=="PRE"); dim(prePhenoData)
+preEset <- eset[,which(sampleNames(eset) %in% row.names(prePhenoData))]; preEset
+
+# responders vs non responder differences before treatment
+design <- model.matrix(~as.factor(prePhenoData[,4])) # describe model to be fit
+fit1 <- lmFit(preEset, design)  # fit each probeset to model
+efit <- eBayes(fit1)        # empirical Bayes adjustment
+if(all.equal(row.names(efit), row.names(affyAn))==TRUE) {
+efit$genes <- affyAn$SYMBOL
+efit$ENTREZID <- affyAn$ENTREZID
+}
+topTable(efit)
+resultsPreResp <- topTable(efit, number=60000, genelist = efit$genes) 
+sigPresResp <- subset(resultsPreResp, resultsPreResp$P.Value<0.001); dim(sigPresResp)
+sigPresResp05 <- subset(resultsPreResp, resultsPreResp$P.Value<0.05); dim(sigPresResp05)
+
+
+
+write.csv(sigPresResp, file = "PreTreatment_3Month_RespVsNonResp001.csv" )
+write.csv(sigPresResp05, file = "PreTreatment_3Month_RespVsNonResp05.csv" )
+
+```
+```{r}
+postPhenoData <- subset(phenoData, phenoData$TreatmentTimePoint=="POST"); dim(postPhenoData)
+postEset <- eset[,which(sampleNames(eset) %in% row.names(postPhenoData))]; postEset
+
+# responders vs non responder differences before treatment
+design <- model.matrix(~as.factor(postPhenoData[,4])) # describe model to be fit
+fit1 <- lmFit(postEset, design)  # fit each probeset to model
+efit <- eBayes(fit1)        # empirical Bayes adjustment
+if(all.equal(row.names(efit), row.names(affyAn))==TRUE) {
+efit$genes <- affyAn$SYMBOL
+efit$ENTREZID <- affyAn$ENTREZID
+}
+topTable(efit)
+resultsPostResp <- topTable(efit, number=60000) 
+sigPostResp <- subset(resultsPostResp, resultsPostResp$P.Value<0.001); dim(sigPostResp)
+sigPostResp05 <- subset(resultsPostResp, resultsPostResp$P.Value<0.05); dim(sigPostResp05)
+write.csv(sigPostResp, file = "PostTreatment_3Month_RespVsNonResp001.csv" )
+write.csv(sigPostResp05, file = "PostTreatment_3Month_RespVsNonResp05.csv" )
+```
+
+# Paired analyses
+
+```{r}
+# paired analysis 
+# 3 months post-pre
+esetPre <- eset[,sampleNames(eset)%in%row.names(subset(phenoData, phenoData$TreatmentTimePoint=="PRE"))]
+esetPost <- eset[,sampleNames(eset)%in%row.names(subset(phenoData, phenoData$TreatmentTimePoint=="POST"))]
+
+phenoDataPaired <- phenoData [which(!duplicated(phenoData$Sample.Number)),]
+
+# post-pre
+esetDiff <- exprs(esetPost) - exprs(esetPre)
+
+design <- model.matrix(~phenoDataPaired[,4]) # describe model to be fit
+# design <- design[,-1]
+fit1 <- lmFit(esetDiff, design)  # fit each probeset to model
+efit <- eBayes(fit1)        # empirical Bayes adjustment
+if(all.equal(row.names(efit), row.names(affyAn))==TRUE) {
+efit$genes <- affyAn$SYMBOL
+efit$ENTREZID <- affyAn$ENTREZID
+}
+topTable(efit)
+resultsPrePost3m <- topTable(efit, number=60000) 
+sigresultsPrePost3m  <- subset(resultsPrePost3m , resultsPrePost3m$P.Value<0.001); dim (sigresultsPrePost3m )
+sigresultsPrePost3m05  <- subset(resultsPrePost3m , resultsPrePost3m$P.Value<0.05); dim (sigresultsPrePost3m05 )
+
+write.csv(sigresultsPrePost3m, file = "PrePostPaired_3month_respVsNon001.csv" )
+write.csv(sigresultsPrePost3m05, file = "PrePostPaired_3month_respVsNonp05.csv" )
+
+```
+
+# 6 months
+
+```{r}
+# post-pre
+phenoDataPaired1 <- subset(phenoDataPaired, phenoDataPaired$X6.Month.Responder!='NA'); dim(phenoDataPaired1)
+esetDiff1 <- esetDiff[,which(colnames(esetDiff) %in%row.names(phenoDataPaired1))]
+design <- model.matrix(~phenoDataPaired1[,4]) # describe model to be fit
+# design <- design[,-1]
+fit1 <- lmFit(esetDiff1, design)  # fit each probeset to model
+efit <- eBayes(fit1)        # empirical Bayes adjustment
+if(all.equal(row.names(efit), row.names(affyAn))==TRUE) {
+efit$genes <- affyAn$SYMBOL
+efit$ENTREZID <- affyAn$ENTREZID
+}
+topTable(efit)
+resultsPrePost6m <- topTable(efit, number=60000) 
+sigresultsPrePost6m  <- subset(resultsPrePost6m , resultsPrePost6m$P.Value<0.001); dim (sigresultsPrePost6m )
+sigresultsPrePost6m05  <- subset(resultsPrePost6m , resultsPrePost6m$P.Value<0.05); dim (sigresultsPrePost6m05 )
+write.csv(sigresultsPrePost6m, file = "PrePostPaired_6month_respVsNon001.csv" )
+write.csv(sigresultsPrePost6m05, file = "PrePostPaired_6month_respVsNonp05.csv" )
+
+```
+
+# Responder at 6 months pre (baseline should be same as 3 months pre)
+
+```{r}
+prePhenoData1 <- subset(prePhenoData, prePhenoData$X6.Month.Responder!='NA'); dim(prePhenoData1)
+preEset1 <- preEset[,which(sampleNames(preEset) %in%row.names(prePhenoData1))]
+# responders vs non responder differences before treatment
+design <- model.matrix(~as.factor(prePhenoData1[,4])) # describe model to be fit
+fit1 <- lmFit(preEset1, design)  # fit each probeset to model
+efit <- eBayes(fit1)        # empirical Bayes adjustment
+if(all.equal(row.names(efit), row.names(affyAn))==TRUE) {
+efit$genes <- affyAn$SYMBOL
+efit$ENTREZID <- affyAn$ENTREZID
+}
+topTable(efit)
+resultsPreResp <- topTable(efit, number=60000) 
+sigPreRes <- subset(resultsPreResp, resultsPreResp$P.Value<0.001); dim(sigPreRes)
+sigPresResp05 <- subset(resultsPreResp, resultsPreResp$P.Value<0.05); dim(sigPresResp05)
+write.csv(sigPreRes, file = "PreTreatmentOnly_6Month_RespVsNon001.csv" )
+write.csv(sigPreRes, file = "PreTreatmentOnly_6Month_RespVsNon05.csv" )
+```
+
+```{r}
+postPhenoData1 <- subset(postPhenoData, postPhenoData$X6.Month.Responder!='NA'); dim(prePhenoData1)
+postEset1 <- postEset[,which(sampleNames(postEset) %in%row.names(postPhenoData1))]
+# responders vs non responder differences before treatment
+design <- model.matrix(~as.factor(postPhenoData1[,4])) # describe model to be fit
+fit1 <- lmFit(postEset1, design)  # fit each probeset to model
+efit <- eBayes(fit1)        # empirical Bayes adjustment
+if(all.equal(row.names(efit), row.names(affyAn))==TRUE) {
+efit$genes <- affyAn$SYMBOL
+efit$ENTREZID <- affyAn$ENTREZID
+}
+topTable(efit)
+resultsPostResp6 <- topTable(efit, number=60000) 
+sigPostResp6 <- subset(resultsPostResp6, resultsPostResp6$P.Value<0.001); dim(sigPostResp6)
+sigPostResp6p05 <- subset(resultsPostResp6, resultsPostResp6$P.Value<0.05); dim(sigPostResp6p05)
+write.csv(sigPostResp6, file = "PostTreatmentOnly_6Month_RespVsNon001.csv" )
+write.csv(sigPostResp6p05, file = "PostTreatmentOnly_6Month_RespVsNon05.csv" )
+```
+
+# Quality check
+```{r}
+# oldpar <- par(mfrow = c(2, 2))
+# image(batch1[, 5:8])
+# par(oldpar)
+# 
+# qc.batch1 <- qc(batch1)
+# slotNames(qc.batch1)
+# qc.batch1@average.background
+#should be less than 120
+
+```
+

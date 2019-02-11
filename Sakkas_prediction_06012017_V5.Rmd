@@ -1,0 +1,274 @@
+---
+title: "Sakkas_prediction_06012017_V5"
+author: "Swapna Mahurkar-Joshi"
+date: "June 1, 2017"
+output:
+  html_document: default
+  word_document: default
+---
+
+```{r}
+library(miRNAfunctions)
+# ls("package:miRNAfunctions")
+library(NanoStringNorm)
+rccPath <- "C:/Users/swapnajoshi/Documents/UCLA_research/analysis_services/Iliopoulos_center_analyses/Sakkas_Iliopoulos/Phase_3/rccFiles_123"
+rccfiles<-read.markup.RCC(rcc.path = rccPath, rcc.pattern="*.RCC|*.rcc",  
+exclude=NULL, include = NULL, nprobes=-1)
+
+ph12<-rccfiles$x
+phenoDat<-read.delim("C:/Users/swapnajoshi/Documents/UCLA_research/analysis_services/Iliopoulos_center_analyses/Sakkas_Iliopoulos/Phase_3/phenoDat123.csv", sep=",")
+row.names(phenoDat) <- phenoDat[,1]
+
+save(phenoDat, ph12, file = "C:/Users/swapnajoshi/Documents/UCLA_research/analysis_services/Iliopoulos_center_analyses/Sakkas_Iliopoulos/Phase_3/miRLevel1.Rda")
+
+```
+
+# Quality check
+
+```{r Quality check}
+
+posC<-ph12[1:6,4:75]
+row.names(posC)<-posC[,2]
+posC1<-t(posC[sort(row.names(posC)),])
+
+png("C:/Users/swapnajoshi/Documents/UCLA_research/analysis_services/Iliopoulos_center_analyses/Sakkas_Iliopoulos/Phase_3/phase_1_2/posControls.png", height = 1500, width = 2000, res = 150)
+boxplot(posC1) 
+dev.off()
+# plot.new()
+# dev.off()
+# for (i in 1:45) {
+#   png(paste(i,"C:/Users/swapnajoshi/Documents/UCLA_research/analysis_services/Iliopoulos_center_analyses/Sakkas_Iliopoulos/Phase_3/phase_1_2/posCon.png"))	
+#   barplot(posC1[i,]) # to look at individual samples
+#   dev.off()
+# }
+
+negC<-ph12[7:12,4:48]
+row.names(negC)<-negC[,2]
+negC1<-t(negC)
+
+png("C:/Users/swapnajoshi/Documents/UCLA_research/analysis_services/Iliopoulos_center_analyses/Sakkas_Iliopoulos/Phase_3/phase_1_2/negControls.png")
+boxplot(negC1) 
+dev.off()
+```
+
+# Normalize the raw data
+Select best normalization method by creating a dataframe of coefficient of variation (CV) with all possible combinations of positive normalization factor, background, sample content prediction and other nomralizations. Choose a combination that is not too stringent on number of expressed genes (ex: avoid extreme background correction), but yiled lowest CV.
+
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+
+norm.comp(ph12, anno, 
+replicates = NULL, 
+CodeCount.methods = c('none', 'sum', 'geo.mean'),
+Background.methods = c('none','mean', 'mean.2sd','max'), 
+SampleContent.methods = c('none','housekeeping.sum', 'housekeeping.geo.mean', 
+	'total.sum','top.mean', 'top.geo.mean', 'low.cv.geo.mean'),
+OtherNorm.methods = c('none','quantile','zscore', 'rank.normal', 'vsn'),
+histogram = FALSE, 
+verbose = TRUE, 
+icc.method = "mixed")
+
+dfNorComp <- norm.comp(ph12)
+dfNorComp <- dfNorComp[order(dfNorComp$cv.pos.results),]
+
+```
+# Topgeo mean is recommended for miRNA, and has relatively low CV. Mean is a moderate background correction method
+
+
+```{r}
+colnames(ph12)[4:75] <- substr(colnames(ph12)[4:75],2,100)
+# traits <- pData1
+nano.norm<-NanoStringNorm(ph12,anno = NA,header = NA,
+                          Probe.Correction.Factor ='none',CodeCount='geo.mean',
+                          Background = 'mean',SampleContent =	'top.geo.mean',	
+                          OtherNorm =	'none',
+                          round.values = TRUE,
+                          is.log = FALSE,
+                          take.log = TRUE,
+                          return.matrix.of.endogenous.probes = FALSE,
+                          traits = NA,
+                          predict.conc = FALSE,
+                          verbose = TRUE,
+                          genes.to.fit,
+                          genes.to.predict,
+                          guess.cartridge = FALSE
+)
+
+```
+
+Since there are 18 samples with missing data, exclude them
+```{r}
+ mis <- c(
+"20150909_cart_A.Dr_Sakkas__plasma_A.miRNAV3_05",              
+"20150909_cart_A.Dr_Sakkas__plasma_A.miRNAV3_06",             
+"20150909_cart_A.Dr_Sakkas__plasma_A.miRNAV3_07",              
+"20150909_cart_A.Dr_Sakkas__plasma_A.miRNAV3_09",              
+"20150909_cart_A.Dr_Sakkas__plasma_A.miRNAV3_10",             
+"20150909_cart_A.Dr_Sakkas__plasma_A.miRNAV3_12",              
+"20150909_cartB.Dr_Sakkas_PLASMA_B._miRNA_v3_01",              
+"20150909_cartB.Dr_Sakkas_PLASMA_B._miRNA_v3_02",             
+"20150909_cartB.Dr_Sakkas_PLASMA_B._miRNA_v3_03",             
+"20150909_cartB.Dr_Sakkas_PLASMA_B._miRNA_v3_04",             
+"20150909_cartB.Dr_Sakkas_PLASMA_B._miRNA_v3_05",             
+"20150909_cartB.Dr_Sakkas_PLASMA_B._miRNA_v3_06",              
+"20150909_cartB.Dr_Sakkas_PLASMA_B._miRNA_v3_07",             
+"20150909_cartB.Dr_Sakkas_PLASMA_B._miRNA_v3_08",              
+"20150909_cartB.Dr_Sakkas_PLASMA_B._miRNA_v3_09",              
+"20150909_cartB.Dr_Sakkas_PLASMA_B._miRNA_v3_10",             
+"20150909_cartB.Dr_Sakkas_PLASMA_B._miRNA_v3_11",             
+"20150909_cartB.Dr_Sakkas_PLASMA_B._miRNA_v3_12")             
+
+ph12_1 <- ph12[,!colnames(ph12)%in%mis]; dim(ph12_1)
+
+nano.norm<-NanoStringNorm(ph12_1,anno = NA,header = NA,
+                          Probe.Correction.Factor ='none',CodeCount='geo.mean',
+                          Background = 'mean',SampleContent =	'top.geo.mean',	
+                          OtherNorm =	'none',
+                          round.values = TRUE,
+                          is.log = FALSE,
+                          take.log = TRUE,
+                          return.matrix.of.endogenous.probes = FALSE,
+                          traits = NA,
+                          predict.conc = FALSE,
+                          verbose = TRUE,
+                          genes.to.fit,
+                          genes.to.predict,
+                          guess.cartridge = FALSE
+)
+
+nano.norm1 <- as.data.frame(nano.norm$normalized.data)
+row.names(nano.norm1) <- nano.norm1[,2]
+nano.norm2 <- nano.norm1 [nano.norm1$Code.Class == "Endogenous1", -c(1,2,3)]
+nano.norm2$mean1 <- apply(nano.norm2,1,mean)
+hist(nano.norm2$mean1)
+nano.norm3 <- subset(nano.norm2, nano.norm2$mean1 > 2); dim(nano.norm3)
+nano.norm3$mean1 <- NULL
+colnames(nano.norm3) <- substr(colnames(nano.norm3),2,100)
+
+phenoDat1 <- phenoDat[row.names(phenoDat)%in%colnames(nano.norm3),]; dim(phenoDat1 )
+phenoDat1 <- phenoDat1[colnames(nano.norm3),]
+pData1 <- as.data.frame(phenoDat1[colnames(nano.norm3),c(2,3)])
+match(colnames(nano.norm3),row.names(phenoDat1))
+phenoData <- new("AnnotatedDataFrame", data=pData1)
+exprDat <- new("ExpressionSet", exprs=as.matrix(nano.norm3), 
+               phenoData=phenoData)
+
+save(ph12, pData1, nano.norm, nano.norm3, exprDat, file = "C:/Users/swapnajoshi/Documents/UCLA_research/analysis_services/Iliopoulos_center_analyses/Sakkas_Iliopoulos/Phase_3/miRLevel2.Rda")
+
+```
+
+# QC plots
+
+```{r ,echo=FALSE, results='asis', message = FALSE, error = FALSE, warning= FALSE}
+library(ggplot2)
+# Plot all the plots as PDF report.  See help on Plot.NanoStringNorm for examples
+pdf('C:/Users/swapnajoshi/Documents/UCLA_research/analysis_services/Iliopoulos_center_analyses/Sakkas_Iliopoulos/Phase_3/phase_1_2/NanoStringNorm_Example_Plots_All.pdf');
+Plot.NanoStringNorm(
+	x = nano.norm,
+	label.best.guess = TRUE,
+	plot.type = 'all'
+	);
+dev.off();
+plot.new()
+
+Plot.NanoStringNorm(
+	x = nano.norm,
+	label.best.guess = TRUE,
+	plot.type = 'all'
+	)
+
+qqplot1<-qqplot.data(apply(nano.norm3,1,mean))
+ggsave(qqplot1, file=paste(getwd(),"/qqplottissue.mean.png", sep = "/"),height=6.75,width=9) ## 
+qqplot1
+```
+
+# DE genes
+
+```{r}
+
+library(limma)
+cont1 <- paste("endo", "Cont", sep = "-")
+cont2 <- paste("PCOS", "Cont", sep = "-")
+cont3 <- paste("endo", "PCOS", sep = "-")
+pData1$ActualSampleGroup <- substr(pData1$ActualSampleGroup,1,4)
+
+pData1$ActualSampleGroup <- as.factor(pData1$ActualSampleGroup)
+lmRes <- lmDF3F(exprs(exprDat), pData1$ActualSampleGroup, cont1, cont2, cont3)
+colnames(lmRes) <- c(paste(colnames(lmRes)[1:7],"Endometriosis_Controls", sep = "_"), paste(colnames(lmRes)[8:14],"PCOS_Controls", sep = "_"), paste(colnames(lmRes)[15:21],"Endometriosis_PCOS", sep = "_"))
+
+
+SigEndometriosis_Controls <- lmRes[lmRes$'P.Value_Endometriosis_Controls' <= 0.05,c(1:7)]; dim(SigEndometriosis_Controls)
+SigEndometriosis_Controls
+SigPCOS_Controls <- lmRes[lmRes$'P.Value_PCOS_Controls' <= 0.05,c(8:14)]; dim(SigPCOS_Controls)
+SigPCOS_Controls 
+SigEndometriosis_PCOS <- lmRes[lmRes$'P.Value_Endometriosis_PCOS' <= 0.05,c(15:21)]; dim(SigEndometriosis_PCOS)
+SigEndometriosis_PCOS 
+
+write.csv(SigEndometriosis_Controls, file = "C:/Users/swapnajoshi/Documents/UCLA_research/analysis_services/Iliopoulos_center_analyses/Sakkas_Iliopoulos/Phase_3/SigEndometriosis_Controls.csv")
+write.csv(SigPCOS_Controls, file = "C:/Users/swapnajoshi/Documents/UCLA_research/analysis_services/Iliopoulos_center_analyses/Sakkas_Iliopoulos/Phase_3/SigPCOS_Controls.csv")
+write.csv(SigEndometriosis_PCOS, file = "C:/Users/swapnajoshi/Documents/UCLA_research/analysis_services/Iliopoulos_center_analyses/Sakkas_Iliopoulos/Phase_3/SigEndometriosis_PCOS.csv")
+```
+
+
+```{r}
+library(ggplot2)
+# PCA analysis
+# Dx probes
+
+sigMat <- exprs(exprDat)[row.names(exprs(exprDat))%in%c(row.names(SigEndometriosis_Controls),row.names(SigPCOS_Controls), row.names(SigEndometriosis_PCOS)),]; dim(sigMat)
+z1 <- t(apply(sigMat, 1, scale))
+row.names(z1)<-row.names(sigMat)
+pcs <- prcomp(z1, center = F, scale = F)
+prinComp <- cbind(pData1$ActualSampleGroup, pcs$rotation)
+colnames(prinComp)[1] <- "ActualSampleGroup"
+prinComp <- as.data.frame(prinComp)
+plot(prinComp[, c("ActualSampleGroup", "PC1", "PC2", "PC3")], pch = 19, cex = 0.8)
+
+ggplot(prinComp, aes(x = PC1, y = PC2, colour = as.factor(prinComp$ActualSampleGroup))) + geom_point(size = 2)
+levels(pData1$ActualSampleGroup)
+
+sigMat <- exprs(exprDat)[row.names(exprs(exprDat))%in%c(row.names(SigEndometriosis_Controls),row.names(SigPCOS_Controls), row.names(SigEndometriosis_PCOS)),]; dim(sigMat)
+z1 <- t(apply(sigMat, 1, scale))
+row.names(z1)<-row.names(sigMat)
+pcs <- prcomp(z1, center = F, scale = F)
+prinComp <- cbind(pData1$Run,pData1$ActualSampleGroup, pcs$rotation)
+colnames(prinComp)[c(1,2)] <- c("Run","ActualSampleGroup")
+prinComp <- as.data.frame(prinComp)
+plot(prinComp[, c("Run","ActualSampleGroup", "PC1", "PC2", "PC3")], pch = 19, cex = 0.8)
+
+ggplot(prinComp, aes(x = PC1, y = PC2, colour = as.factor(prinComp$Run), shape = as.factor(prinComp$ActualSampleGroup)))  + geom_point(size = 2)
+
+```
+# Heatmap of DE genes
+
+```{r}
+
+# png("C:/Users/swapnajoshi/Documents/UCLA_research/analysis_services/Iliopoulos_center_analyses/Sakkas_Iliopoulos/Phase_3/phase_1_2/HM_sigDXmiRprobes.png", height = 1500, width = 2000, res = 300)
+# hm1 <- heatmapZ(sigMat, pData1$ActualSampleGroup,  pData1$ActualSampleGroup, pData1$Run)
+# dev.off()
+
+heatmapZ(sigMat, pData1$ActualSampleGroup,  pData1$ActualSampleGroup, pData1$Run)
+
+
+
+```
+
+```{r}
+library(randomForest)
+set.seed(2210); fit <- randomForest ( as.matrix(t(z1)) , as.factor(pData1$ActualSampleGroup), ntree = 100); fit
+varImpPlot(fit)
+```
+See if the error is reduced by top 4 miRNAs
+```{r}
+selMir<- exprs(exprDat)[row.names(exprs(exprDat))%in%c("hsa-miR-4516|0","hsa-miR-127-3p|0","hsa-miR-4532|0","hsa-miR-1915-3p|0"),]; dim(selMir)
+z2 <- t(apply(selMir, 1, scale))
+row.names(z2)<-row.names(selMir)
+set.seed(2210); 
+fit <- randomForest ( as.matrix(t(z2)) , as.factor(pData1$ActualSampleGroup), ntree = 100); fit
+varImpPlot(fit)
+```
+```
+
+```{r}
+
+```
+

@@ -1,0 +1,687 @@
+---
+title: "Permeability02062018"
+author: "Swapna Mahurkar-Joshi"
+date: "Feb 20 2018"
+output:
+pdf_document: default
+word_document: default
+---
+
+```{r, warning = FALSE, message = FALSE}
+# data(QuantSeqSJ)
+# library(QuantSeqSJ)
+# Permeability related samples only
+## TJP genes
+source('~/GIT_workspace/QuantSeq_RNAseq/src/QuantSeqSJ/R/quantSeq_functions1.R', encoding = 'UTF-8')
+load("C:/Users/swapnajoshi-admin/Documents/GIT_workspace/QuantSeq_RNAseq/temp/featureData.rda")
+load("C:/Users/swapnajoshi-admin/Documents/GIT_workspace/QuantSeq_RNAseq/Data/consistantData/colonTissueRNASeqData.Rda")
+load("C:/Users/swapnajoshi-admin/Box Sync/IBSinetstinalPermeabilityProject/data/consitstantData/per.rda"); dim(per)
+row.names(per) <- gsub(" ","",row.names(per))
+
+load("C:/Users/swapnajoshi-admin/Documents/GIT_workspace/QuantSeq_RNAseq/Data/consistantData/an.rda")
+library(DESeq2)
+library(edgeR)
+tjp <- c("TJP1","TJP3","TJP2","F11R","CLDN1","CLDN2","OCLN","CHRM1","CHRM2","CHRM3", "CGN" , "CGNL1", "MYLK", "PLEKHA7", "TPSAB1", "TPSAB2", "CMA1", "CPA3", "JAM2", "JAM3", "CLDN3", "CLDN4", "CLDN+5", "CLDN7", "CLDN8", "CLDN12", "CLDN15", "CLDN17", "CLDN18", "CLDN20", "CLDN22", "CLDN23", "CLDN24")
+
+```
+
+# DEseq
+## Dx
+### All genes all subjects TJPs 
+
+```{r}
+all.equal(row.names(colDat),colnames(exprColDat))
+colDat$Group <- as.factor(colDat$Group)
+colDat$Lane  <- as.factor(colDat$Lane)
+QDxRes1      <- deseqOut(exprColDat, colDat, "Group", "Lane", 5, an)
+QDxRes1Fdr01 <- as.data.frame(subset(QDxRes, QDxRes$padj<0.1)); dim(QDxResFdr01)
+QDxRes1Tjp   <- data.frame(QDxRes[QDxRes$GeneSymbol%in%tjp,c(1,2,5,7)])
+QDxRes1Tjp
+```
+
+# Permeability samples only
+
+
+
+```{r}
+load("C:/Users/swapnajoshi-admin/Documents/GIT_workspace/QuantSeq_RNAseq/Data/consistantData/an.rda")
+exprColDatPerm <- exprColDat[,colnames(exprColDat)%in%row.names(per)]; dim(exprColDatPerm)
+colDatPerm     <- colDat[row.names(colDat)%in%colnames(exprColDatPerm),]; dim(colDatPerm)
+all.equal(row.names(colDatPerm),colnames(exprColDatPerm))
+```
+
+```{r}
+colDatPerm$Dx          <- gsub(1,"HC",  colDatPerm$Group)
+colDatPerm$Dx          <- gsub(2,"IBS", colDatPerm$Dx)
+colDatPerm$Gender      <- gsub(1, "M",  colDatPerm$Sex)
+colDatPerm$Gender      <- gsub(2, "F",  colDatPerm$Gender)
+colDatPerm$IBS_Sex_int <- interaction(colDatPerm$Dx, colDatPerm$Gender)
+colDatPerm$Gender      <- as.factor(colDatPerm$Gender)
+colDatPerm$Lane        <- as.factor(colDatPerm$Lane)
+colDatPerm$Dx          <- as.factor(colDatPerm$Dx)
+```
+
+# DX
+
+```{r}
+df_temp            <- matrix(NA, ncol=dim(exprColDatPerm)[2], nrow=dim(exprColDatPerm)[1])
+
+for ( i in 1: length(rownames(exprColDatPerm))){
+  for(j in 1: length(colnames(exprColDatPerm)))
+if(exprColDatPerm[i,j]>1)  {
+  df_temp[i,j] <- 1
+}
+  else(df_temp[i,j] <- 0)
+}
+
+df_temp            <- as.data.frame(df_temp)
+row.names(df_temp) <- row.names(exprColDatPerm)
+colnames(df_temp)  <- colnames(exprColDatPerm)
+df_temp$sum1       <- rowSums(df_temp)
+df_temp1           <- subset(df_temp, df_temp$sum1>19)
+dim(df_temp1)
+
+exprColDatPerm_1   <- exprColDatPerm[row.names(exprColDatPerm)%in%row.names(df_temp1),]
+```
+
+## Deseq
+
+```{r}
+QDxDeseqPermRes <- deseqOut(exprColDatPerm_1, colDatPerm, "Group", "Lane", 5, an)
+QDxDeseqResFdr10 <- as.data.frame(subset(QDxDeseqPermRes, QDxDeseqPermRes$padj<0.1)); dim(QDxDeseqResFdr10)
+```
+
+```{r}
+filePath       <- "C:/Users/swapnajoshi-admin/Documents/GIT_workspace/IBSinetstinalPermeabilityProject/temp/DESeq/Dx"
+QDxResDeseqTjp <- data.frame(QDxDeseqPermRes[QDxDeseqPermRes$GeneSymbol%in%tjp,c(1,2,5,7)])
+QDxResDeseqTjp
+write.csv(QDxResDeseqTjp, file = paste(filePath, "QDxResDeseqTjp.csv", sep = "/"))
+save(QDxDeseqPermRes, file = paste(filePath, "QDxDeseqPermRes.Rda", sep = "/"))
+```
+
+## Association with Sex
+
+```{r}
+table(colDatPerm$Gender); #smaller group has 24 subjects
+df_temp <- matrix(NA, ncol=dim(exprColDatPerm)[2], nrow=dim(exprColDatPerm)[1])
+for ( i in 1: length(rownames(exprColDatPerm))){
+  for(j in 1: length(colnames(exprColDatPerm)))
+if(exprColDatPerm[i,j]>1)  {
+  df_temp[i,j] <- 1
+}
+  else(df_temp[i,j] <- 0)
+}
+df_temp <- as.data.frame(df_temp)
+row.names(df_temp) <- row.names(exprColDatPerm)
+colnames(df_temp) <- colnames(exprColDatPerm)
+df_temp$sum1 <- rowSums(df_temp)
+df_temp1<- subset(df_temp, df_temp$sum1>24)
+dim(df_temp1)
+
+exprColDatPerm_1 <- exprColDatPerm[row.names(exprColDatPerm)%in%row.names(df_temp1),]
+```
+
+```{r}
+QSexResDeseq      <- deseqOut(exprColDatPerm_1, colDatPerm, "Gender", "Lane", 5, an)
+QSexResDeseqFdr01 <- as.data.frame(subset(QSexResDeseq, QSexResDeseq$padj<0.1)); dim(QSexResDeseqFdr01)
+```
+
+```{r}
+filePath       <- "C:/Users/swapnajoshi-admin/Documents/GIT_workspace/IBSinetstinalPermeabilityProject/temp/DESeq/Sex"
+QSexResDeseqTjp <- data.frame(QSexResDeseq[QSexResDeseq$GeneSymbol%in%tjp,c(1,2,5,7)])
+QSexResDeseqTjp
+write.csv(QSexResDeseqTjp, file = paste(filePath, "QSexResDeseqTjp.csv", sep = "/"))
+save(QSexResDeseq, file = paste(filePath, "QSexResDeseq.Rda", sep = "/"))
+```
+
+## Dx Sex interaction
+
+```{r}
+table(colDatPerm$IBS_Sex_int); #smaller group has 9 subjects
+df_temp <- matrix(NA, ncol=dim(exprColDatPerm)[2], nrow=dim(exprColDatPerm)[1])
+for ( i in 1: length(rownames(exprColDatPerm))){
+  for(j in 1: length(colnames(exprColDatPerm)))
+if(exprColDatPerm[i,j]>1)  {
+  df_temp[i,j] <- 1
+}
+  else(df_temp[i,j] <- 0)
+}
+df_temp <- as.data.frame(df_temp)
+row.names(df_temp) <- row.names(exprColDatPerm)
+colnames(df_temp) <- colnames(exprColDatPerm)
+df_temp$sum1 <- rowSums(df_temp)
+df_temp1<- subset(df_temp, df_temp$sum1>9)
+dim(df_temp1)
+
+exprColDatPerm_1 <- exprColDatPerm[row.names(exprColDatPerm)%in%row.names(df_temp1),]
+```
+
+```{r}
+QIntResDeseq  <- deseqOut(exprColDatPerm_1, colDatPerm, "IBS_Sex_int", "Lane",an)
+QIntResDeseq  <- as.data.frame(QIntResDeseq)
+```
+
+```{r}
+ibs_f_m_fdr05 <- subset(QIntResDeseq, QIntResDeseq$IBS.F_IBS.M_padj<0.05); dim(ibs_f_m_fdr05)
+hc_f_m_fdr05 <- subset(QIntResDeseq, QIntResDeseq$HC.F_HC.M_padj<0.05); dim(hc_f_m_fdr05)
+ibs_f_hc_f_fdr05 <- subset(QIntResDeseq, QIntResDeseq$IBS.F_HC.F_padj<0.05); dim(ibs_f_hc_f_fdr05)
+ibs_m_hc_m_fdr05 <- subset(QIntResDeseq, QIntResDeseq$IBS.M_HC.M_padj<0.05); dim(ibs_m_hc_m_fdr05)
+
+ibs_f_m_fdr10 <- subset(QIntResDeseq, QIntResDeseq$IBS.F_IBS.M_FDR<0.1); dim(ibs_f_m_fdr10)
+hc_m_f_fdr10 <- subset(QIntResDeseq, QIntResDeseq$HC.F_HC.M_FDR<0.1); dim(hc_m_f_fdr10)
+ibs_f_hc_f_fdr10 <- subset(QIntResDeseq, QIntResDeseq$IBS.F_HC.F_FDR<0.1); dim(ibs_f_hc_f_fdr10)
+ibs_m_hc_m_fdr10 <- subset(QIntResDeseq, QIntResDeseq$IBS.M_HC.M_FDR<0.1); dim(ibs_m_hc_m_fdr10)
+
+ibs_f_m_p005 <- subset(QIntResDeseq, QIntResDeseq$IBS.F_IBS.M_PValue<0.05); dim(ibs_f_m_p005)
+hc_m_f_p005 <- subset(QIntResDeseq, QIntResDeseq$HC.F_HC.M_PValue<0.05); dim(hc_m_f_p005)
+ibs_f_hc_f_p005 <- subset(QIntResDeseq, QIntResDeseq$IBS.F_HC.F_PValue<0.05); dim(ibs_f_hc_f_p005)
+ibs_m_hc_m_p005 <- subset(QIntResDeseq, QIntResDeseq$IBS.M_HC.M_PValue<0.05); dim(ibs_m_hc_m_p005)
+```
+
+```{r}
+QIntResTjp <- data.frame(QIntResedgeR[QIntResedgeR$Gene_Symbol%in%tjp,])
+QIntResTjp1 <- QIntResTjp[,c(grep("PValue",colnames(QIntResTjp)),c(grep("logFC",colnames(QIntResTjp))),31)]
+row.names(QIntResTjp1) <- QIntResTjp1[,13]
+QIntResTjp1 <- QIntResTjp1[,-c(2,6,8,12,13)]
+QIntResTjp1 <-  QIntResTjp1[, c(1,5,2,6,3,7,4,8)]
+write.csv(QIntResTjp1, file = "C:/Users/swapnajoshi-admin/Documents/GIT_workspace/IBSinetstinalPermeabilityProject/temp/QIntResTjp1.csv")
+```
+
+## Association with Bowel Habits
+
+```{r}
+### BH
+colDatPermCD <- subset(colDatPerm, colDatPerm$BH_Colon_Exam=="C"|colDatPerm$BH_Colon_Exam=="D"); dim(colDatPermCD)
+# [1] 30  24
+exprColDatPermCD <- exprColDat[,colnames(exprColDat)%in%row.names(colDatPermCD)]; dim(exprColDatPermCD)
+# [1] 60204   30
+all.equal(colnames(exprColDatPermCD),row.names(colDatPermCD))
+colDatPermCD$BH_Colon_Exam <- factor(colDatPermCD$BH_Colon_Exam)
+colDatPermCD$Lane <- factor(colDatPermCD$Lane)
+QBHCDRes <- deseqOut(exprColDatPermCD, colDatPermCD, "BH_Colon_Exam", "Lane", 5, featureData)
+QBHCDResFdr01 <- as.data.frame(subset(QBHCDRes, QBHCDRes$padj<0.1)); dim(QBHCDResFdr01)
+QBHCDResTjp <- QBHCDRes[QBHCDRes$V2%in%tjp,c(28,34,31)]
+###
+colDatPermCN <- subset(colDatPerm, colDatPerm$BH_Colon_Exam=="C"|colDatPerm$BH_Colon_Exam=="N"); dim(colDatPermCN)
+# [1] 30  24
+exprColDatPermCN <- exprColDat[,colnames(exprColDat)%in%row.names(colDatPermCN)]; dim(exprColDatPermCN)
+# [1] 60204   30
+all.equal(colnames(exprColDatPermCN),row.names(colDatPermCN))
+relevel()
+colDatPermCN$BH_Colon_Exam <- factor(colDatPermCN$BH_Colon_Exam)
+colDatPermCN$BH_Colon_Exam <- relevel(colDatPermCN$BH_Colon_Exam,ref="N")
+colDatPermCN$Lane <- as.factor(colDatPermCN$Lane)
+QBHCNRes <- deseqOut(exprColDatPermCN, colDatPermCN, "BH_Colon_Exam", "Lane", 5, featureData)
+QBHCNResFdr01 <- as.data.frame(subset(QBHCNRes, QBHCNRes$padj<0.1)); dim(QBHCNResFdr01)
+QBHCNResTjp <- QBHCNRes[QBHCNRes$V2%in%tjp,c(28,34,31)]
+
+###
+colDatPermDN <- subset(colDatPerm, colDatPerm$BH_Colon_Exam=="D"|colDatPerm$BH_Colon_Exam=="N"); dim(colDatPermDN)
+# [1] 38  24
+exprColDatPermDN <- exprColDat[,colnames(exprColDat)%in%row.names(colDatPermDN)]; dim(exprColDatPermDN)
+# [1] 60204   38
+all.equal(colnames(exprColDatPermDN),row.names(colDatPermDN))
+colDatPermDN$BH_Colon_Exam <- factor(colDatPermDN$BH_Colon_Exam)
+colDatPermDN$BH_Colon_Exam <- relevel(colDatPermDN$BH_Colon_Exam,ref="N")
+colDatPermDN$Lane <- as.factor(colDatPermDN$Lane)
+QBHDNRes <- deseqOut(exprColDatPermDN, colDatPermDN, "BH_Colon_Exam", "Lane", 5, featureData)
+QBHDNResFdr01 <- as.data.frame(subset(QBHDNRes, QBHDNRes$padj<0.1)); dim(QBHDNResFdr01)
+QBHDNResTjp <- QBHDNRes[QBHDNRes$V2%in%tjp,c(28,34,31)]
+
+```
+
+# EdgeR
+
+## Dx
+
+```{r}
+QDxResedgeR <- edgeROut(exprColDatPerm_1, colDatPerm, "Dx", "Lane")
+QDxResFdr05 <- as.data.frame(subset(QDxResedgeR, QDxResedgeR$FDR<0.05)); dim(QDxResFdr05)
+QDxResFdr10 <- as.data.frame(subset(QDxResedgeR, QDxResedgeR$FDR<0.1)); dim(QDxResFdr10)
+QDxResP005 <- as.data.frame(subset(QDxResedgeR, QDxResedgeR$PValue<0.005)); dim(QDxResP005)
+```
+
+```{r}
+QDxResTjp <- data.frame(QDxResedgeR[QDxResedgeR$Gene_Symbol%in%tjp,])
+row.names(QDxResTjp) <- QDxResTjp[,6]
+QDxResTjp <- QDxResTjp[,-c(2,3,5,6)]
+colnames(QDxResTjp) <- paste("IBS_HC",colnames(QDxResTjp), sep = "_")
+```
+
+```{r}
+QSexResedgeR <- edgeROut(exprColDatPerm_1, colDatPerm, "Gender", "Lane")
+QSexResFdr05 <- as.data.frame(subset(QSexResedgeR, QSexResedgeR$FDR<0.05)); dim(QSexResFdr05)
+QSexResFdr10 <- as.data.frame(subset(QSexResedgeR, QSexResedgeR$FDR<0.1)); dim(QSexResFdr10)
+QSexResP005 <- as.data.frame(subset(QSexResedgeR, QSexResedgeR$PValue<0.005)); dim(QSexResP005)
+```
+
+```{r}
+QSexResTjp <- data.frame(QSexResedgeR[QSexResedgeR$Gene_Symbol%in%tjp,])
+row.names(QSexResTjp) <- QSexResTjp[,6]
+QSexResTjp <- QSexResTjp[,-c(2,3,5,6)]
+colnames(QSexResTjp) <- paste("M_F",colnames(QSexResTjp), sep = "_")
+QSexResTjp
+write.csv(QSexResTjp, file = "C:/Users/swapnajoshi-admin/Documents/GIT_workspace/IBSinetstinalPermeabilityProject/temp/QSexResTjp.csv")
+```
+
+```{r}
+TJP_Dx_Sex <- merge(QDxResTjp, QSexResTjp, by = 'row.names', all = TRUE)
+row.names(TJP_Dx_Sex) <- TJP_Dx_Sex[,1]
+
+TJP_Dx_Sex <-  TJP_Dx_Sex[,-1]
+
+write.csv(TJP_Dx_Sex, file = "C:/Users/swapnajoshi-admin/Documents/GIT_workspace/IBSinetstinalPermeabilityProject/temp/TJP_Dx_Sex.csv")
+```
+
+## Dx Sex interaction
+
+```{r}
+table(colDatPerm$IBS_Sex_int); #smaller group has 9 subjects
+df_temp <- matrix(NA, ncol=dim(exprColDatPerm)[2], nrow=dim(exprColDatPerm)[1])
+for ( i in 1: length(rownames(exprColDatPerm))){
+  for(j in 1: length(colnames(exprColDatPerm)))
+if(exprColDatPerm[i,j]>1)  {
+  df_temp[i,j] <- 1
+}
+  else(df_temp[i,j] <- 0)
+}
+df_temp <- as.data.frame(df_temp)
+row.names(df_temp) <- row.names(exprColDatPerm)
+colnames(df_temp) <- colnames(exprColDatPerm)
+df_temp$sum1 <- rowSums(df_temp)
+df_temp1<- subset(df_temp, df_temp$sum1>9)
+dim(df_temp1)
+
+exprColDatPerm_1 <- exprColDatPerm[row.names(exprColDatPerm)%in%row.names(df_temp1),]
+```
+
+```{r}
+QIntResedgeR <- edgeROut(exprColDatPerm_1, colDatPerm, "IBS_Sex_int", "Lane")
+
+ibs_f_m_fdr05 <- subset(QIntResedgeR, QIntResedgeR$IBS.F_IBS.M_FDR<0.05); dim(ibs_f_m_fdr05)
+hc_f_m_fdr05 <- subset(QIntResedgeR, QIntResedgeR$HC.F_HC.M_FDR<0.05); dim(hc_f_m_fdr05)
+ibs_f_hc_f_fdr05 <- subset(QIntResedgeR, QIntResedgeR$IBS.F_HC.F_FDR<0.05); dim(ibs_f_hc_f_fdr05)
+ibs_m_hc_m_fdr05 <- subset(QIntResedgeR, QIntResedgeR$IBS.M_HC.M_FDR<0.05); dim(ibs_m_hc_m_fdr05)
+
+ibs_f_m_fdr10 <- subset(QIntResedgeR, QIntResedgeR$IBS.F_IBS.M_FDR<0.1); dim(ibs_f_m_fdr10)
+hc_m_f_fdr10 <- subset(QIntResedgeR, QIntResedgeR$HC.F_HC.M_FDR<0.1); dim(hc_m_f_fdr10)
+ibs_f_hc_f_fdr10 <- subset(QIntResedgeR, QIntResedgeR$IBS.F_HC.F_FDR<0.1); dim(ibs_f_hc_f_fdr10)
+ibs_m_hc_m_fdr10 <- subset(QIntResedgeR, QIntResedgeR$IBS.M_HC.M_FDR<0.1); dim(ibs_m_hc_m_fdr10)
+
+ibs_f_m_p005 <- subset(QIntResedgeR, QIntResedgeR$IBS.F_IBS.M_PValue<0.05); dim(ibs_f_m_p005)
+hc_m_f_p005 <- subset(QIntResedgeR, QIntResedgeR$HC.F_HC.M_PValue<0.05); dim(hc_m_f_p005)
+ibs_f_hc_f_p005 <- subset(QIntResedgeR, QIntResedgeR$IBS.F_HC.F_PValue<0.05); dim(ibs_f_hc_f_p005)
+ibs_m_hc_m_p005 <- subset(QIntResedgeR, QIntResedgeR$IBS.M_HC.M_PValue<0.05); dim(ibs_m_hc_m_p005)
+```
+
+```{r}
+QIntResTjp <- data.frame(QIntResedgeR[QIntResedgeR$Gene_Symbol%in%tjp,])
+QIntResTjp1 <- QIntResTjp[,c(grep("PValue",colnames(QIntResTjp)),c(grep("logFC",colnames(QIntResTjp))),31)]
+row.names(QIntResTjp1) <- QIntResTjp1[,13]
+QIntResTjp1 <- QIntResTjp1[,-c(2,6,8,12,13)]
+QIntResTjp1 <-  QIntResTjp1[, c(1,5,2,6,3,7,4,8)]
+write.csv(QIntResTjp1, file = "C:/Users/swapnajoshi-admin/Documents/GIT_workspace/IBSinetstinalPermeabilityProject/temp/QIntResTjp1.csv")
+```
+
+# Bowel habit differences (IBS-D vs HC)
+
+```{r}
+colDatPermD <- subset(colDatPerm, colDatPerm$BH_Colon_Exam=="D"|colDatPerm$BH_Colon_Exam=="N")
+table(colDatPermD$BH_Colon_Exam); #smaller group has 19 subjects
+colDatPermD$BH_Colon_Exam <- factor(colDatPermD$BH_Colon_Exam)
+colDatPermD$BH_Colon_Exam <- relevel(colDatPermD$BH_Colon_Exam, ref = "N")
+exprColDatPermD <- exprColDatPerm[,colnames(exprColDatPerm)%in%row.names(colDatPermD)]
+df_temp <- matrix(NA, ncol=dim(exprColDatPermD)[2], nrow=dim(exprColDatPermD)[1])
+for ( i in 1: length(rownames(exprColDatPermD))){
+  for(j in 1: length(colnames(exprColDatPermD)))
+if(exprColDatPermD[i,j]>1)  {
+  df_temp[i,j] <- 1
+}
+  else(df_temp[i,j] <- 0)
+}
+df_temp <- as.data.frame(df_temp)
+row.names(df_temp) <- row.names(exprColDatPermD)
+colnames(df_temp) <- colnames(exprColDatPermD)
+df_temp$sum1 <- rowSums(df_temp)
+df_temp1<- subset(df_temp, df_temp$sum1>19)
+dim(df_temp1)
+
+exprColDatPermD_1 <- exprColDatPermD[row.names(exprColDatPermD)%in%row.names(df_temp1),]
+```
+
+```{r}
+QDedgeR <- edgeROut(exprColDatPermD_1, colDatPermD, "BH_Colon_Exam", "Lane")
+
+ibs_D_HC_fdr05 <- subset(QDedgeR, QDedgeR$FDR<0.05); dim(ibs_D_HC_fdr05)
+ibs_D_HC_fdr10 <- subset(QDedgeR, QDedgeR$FDR<0.10); dim(ibs_D_HC_fdr10)
+ibs_D_HC_p005  <- subset(QDedgeR, QDedgeR$PValue<0.005); dim(ibs_D_HC_p005)
+```
+```{r}
+QDResTjp <- data.frame(QDedgeR[QDedgeR$Gene_Symbol%in%tjp,])
+row.names(QDResTjp) <- QDResTjp[,6]
+QDResTjp <- QDResTjp[,-c(2,3,5,6)]
+colnames(QDResTjp) <- paste("D_HC",colnames(QDResTjp), sep = "_")
+write.csv(QDResTjp, file = "C:/Users/swapnajoshi-admin/Documents/GIT_workspace/IBSinetstinalPermeabilityProject/temp/QDResTjp.csv")
+```
+
+# Bowel habit differences (IBS-D vs HC) women
+
+```{r}
+colDatPermDF <- subset(colDatPerm, colDatPerm$BH_Colon_Exam=="D" & colDatPerm$Sex==2 |colDatPerm$BH_Colon_Exam=="N" & colDatPerm$Sex==2)
+table(colDatPermDF$BH_Colon_Exam); #smaller group has 10 subjects
+colDatPermDF$BH_Colon_Exam <- factor(colDatPermDF$BH_Colon_Exam)
+colDatPermDF$BH_Colon_Exam <- relevel(colDatPermDF$BH_Colon_Exam, ref = "N")
+exprColDatPermDF <- exprColDatPerm[,colnames(exprColDatPerm)%in%row.names(colDatPermDF)]
+df_temp <- matrix(NA, ncol=dim(exprColDatPermDF)[2], nrow=dim(exprColDatPermDF)[1])
+for ( i in 1: length(rownames(exprColDatPermDF))){
+  for(j in 1: length(colnames(exprColDatPermDF)))
+if(exprColDatPermDF[i,j]>1)  {
+  df_temp[i,j] <- 1
+}
+  else(df_temp[i,j] <- 0)
+}
+df_temp <- as.data.frame(df_temp)
+row.names(df_temp) <- row.names(exprColDatPermDF)
+colnames(df_temp) <- colnames(exprColDatPermDF)
+df_temp$sum1 <- rowSums(df_temp)
+df_temp1<- subset(df_temp, df_temp$sum1>10)
+dim(df_temp1)
+
+exprColDatPermDF_1 <- exprColDatPermDF[row.names(exprColDatPermDF)%in%row.names(df_temp1),]
+```
+
+```{r}
+QDFedgeR <- edgeROut(exprColDatPermDF_1, colDatPermDF, "BH_Colon_Exam", "Lane")
+
+ibs_DF_HC_fdr05 <- subset(QDFedgeR, QDFedgeR$FDR<0.05); dim(ibs_DF_HC_fdr05)
+ibs_DF_HC_fdr10 <- subset(QDFedgeR, QDFedgeR$FDR<0.10); dim(ibs_DF_HC_fdr10)
+ibs_DF_HC_p005  <- subset(QDFedgeR, QDFedgeR$PValue<0.005); dim(ibs_DF_HC_p005)
+
+```
+
+```{r}
+QDFResTjp <- data.frame(QDFedgeR[QDFedgeR$Gene_Symbol%in%tjp,])
+row.names(QDFResTjp) <- QDFResTjp[,6]
+QDFResTjp <- QDFResTjp[,-c(2,3,5,6)]
+colnames(QDFResTjp) <- paste("DF_HC",colnames(QDFResTjp), sep = "_")
+write.csv(QDFResTjp, file = "C:/Users/swapnajoshi-admin/Documents/GIT_workspace/IBSinetstinalPermeabilityProject/temp/QDFResTjp.csv")
+```
+
+
+# Bowel habit differences (IBS-D vs HC) men
+
+```{r}
+colDatPermDM <- subset(colDatPerm, colDatPerm$BH_Colon_Exam=="D" & colDatPerm$Sex==1 |colDatPerm$BH_Colon_Exam=="N" & colDatPerm$Sex==1)
+table(colDatPermDM$BH_Colon_Exam); #smaller group has 10 subjects
+colDatPermDM$BH_Colon_Exam <- factor(colDatPermDM$BH_Colon_Exam)
+colDatPermDM$BH_Colon_Exam <- relevel(colDatPermDM$BH_Colon_Exam, ref = "N")
+exprColDatPermDM <- exprColDatPerm[,colnames(exprColDatPerm)%in%row.names(colDatPermDM)]
+df_temp <- matrix(NA, ncol=dim(exprColDatPermDM)[2], nrow=dim(exprColDatPermDM)[1])
+for ( i in 1: length(rownames(exprColDatPermDM))){
+  for(j in 1: length(colnames(exprColDatPermDM)))
+if(exprColDatPermDM[i,j]>1)  {
+  df_temp[i,j] <- 1
+}
+  else(df_temp[i,j] <- 0)
+}
+df_temp <- as.data.frame(df_temp)
+row.names(df_temp) <- row.names(exprColDatPermDM)
+colnames(df_temp) <- colnames(exprColDatPermDM)
+df_temp$sum1 <- rowSums(df_temp)
+df_temp1<- subset(df_temp, df_temp$sum1>9)
+dim(df_temp1)
+
+exprColDatPermDM_1 <- exprColDatPermDM[row.names(exprColDatPermDM)%in%row.names(df_temp1),]
+```
+
+```{r}
+QDMedgeR <- edgeROut(exprColDatPermDM_1, colDatPermDM, "BH_Colon_Exam", "Lane")
+
+ibs_DM_HC_fdr05 <- subset(QDMedgeR, QDMedgeR$FDR<0.05); dim(ibs_DM_HC_fdr05)
+ibs_DM_HC_fdr10 <- subset(QDMedgeR, QDMedgeR$FDR<0.10); dim(ibs_DM_HC_fdr10)
+ibs_DM_HC_p005  <- subset(QDMedgeR, QDMedgeR$PValue<0.005); dim(ibs_DM_HC_p005)
+
+```
+
+```{r}
+QDMResTjp <- data.frame(QDMedgeR[QDMedgeR$Gene_Symbol%in%tjp,])
+row.names(QDMResTjp) <- QDMResTjp[,6]
+QDMResTjp <- QDMResTjp[,-c(2,3,5,6)]
+colnames(QDMResTjp) <- paste("DM_HC",colnames(QDMResTjp), sep = "_")
+write.csv(QDMResTjp, file = "C:/Users/swapnajoshi-admin/Documents/GIT_workspace/IBSinetstinalPermeabilityProject/temp/QDMResTjp.csv")
+```
+
+# Bowel habit differences (IBS-C vs HC)
+
+```{r}
+colDatPermC <- subset(colDatPerm, colDatPerm$BH_Colon_Exam=="C"|colDatPerm$BH_Colon_Exam=="N")
+table(colDatPermC$BH_Colon_Exam); #smaller group has 11 subjects
+colDatPermC$BH_Colon_Exam <- factor(colDatPermC$BH_Colon_Exam)
+colDatPermC$BH_Colon_Exam <- relevel(colDatPermC$BH_Colon_Exam, ref = "N")
+exprColDatPermC <- exprColDatPerm[,colnames(exprColDatPerm)%in%row.names(colDatPermC)]
+df_temp <- matrix(NA, ncol=dim(exprColDatPermC)[2], nrow=dim(exprColDatPermC)[1])
+for ( i in 1: length(rownames(exprColDatPermC))){
+  for(j in 1: length(colnames(exprColDatPermC)))
+if(exprColDatPermC[i,j]>1)  {
+  df_temp[i,j] <- 1
+}
+  else(df_temp[i,j] <- 0)
+}
+df_temp <- as.data.frame(df_temp)
+row.names(df_temp) <- row.names(exprColDatPermC)
+colnames(df_temp) <- colnames(exprColDatPermC)
+df_temp$sum1 <- rowSums(df_temp)
+df_temp1<- subset(df_temp, df_temp$sum1>11)
+dim(df_temp1)
+
+exprColDatPermC_1 <- exprColDatPermC[row.names(exprColDatPermC)%in%row.names(df_temp1),]
+```
+
+```{r}
+QCedgeR <- edgeROut(exprColDatPermC_1, colDatPermC, "BH_Colon_Exam", "Lane")
+
+ibs_C_HC_fdr05 <- subset(QCedgeR, QCedgeR$FDR<0.05); dim(ibs_C_HC_fdr05)
+ibs_C_HC_fdr10 <- subset(QCedgeR, QCedgeR$FDR<0.10); dim(ibs_C_HC_fdr10)
+ibs_C_HC_p005  <- subset(QCedgeR, QCedgeR$PValue<0.005); dim(ibs_C_HC_p005)
+
+```
+
+```{r}
+QCResTjp <- data.frame(QCedgeR[QCedgeR$Gene_Symbol%in%tjp,])
+row.names(QCResTjp) <- QCResTjp[,6]
+QCResTjp <- QCResTjp[,-c(2,3,5,6)]
+colnames(QCResTjp) <- paste("C_HC",colnames(QCResTjp), sep = "_")
+write.csv(QCResTjp, file = "C:/Users/swapnajoshi-admin/Documents/GIT_workspace/IBSinetstinalPermeabilityProject/temp/QCResTjp.csv")
+```
+
+```{r}
+TJP_BH <- merge(QCResTjp, QDResTjp, by = 'row.names', all = TRUE)
+row.names(TJP_BH) <- TJP_BH[,1]
+TJP_BH <-  TJP_BH[,-1]
+write.csv(TJP_BH, file = "C:/Users/swapnajoshi-admin/Documents/GIT_workspace/IBSinetstinalPermeabilityProject/temp/TJP_BH.csv")
+```
+
+# Bowel habit differences (IBS-C vs HC) women
+
+```{r}
+colDatPermCF <- subset(colDatPerm, colDatPerm$BH_Colon_Exam=="C" & colDatPerm$Sex==2 |colDatPerm$BH_Colon_Exam=="N" & colDatPerm$Sex==2)
+table(colDatPermCF$BH_Colon_Exam); #smaller group has 8 subjects
+colDatPermCF$BH_Colon_Exam <- factor(colDatPermCF$BH_Colon_Exam)
+colDatPermCF$BH_Colon_Exam <- relevel(colDatPermCF$BH_Colon_Exam, ref = "N")
+exprColDatPermCF <- exprColDatPerm[,colnames(exprColDatPerm)%in%row.names(colDatPermCF)]
+df_temp <- matrix(NA, ncol=dim(exprColDatPermCF)[2], nrow=dim(exprColDatPermCF)[1])
+for ( i in 1: length(rownames(exprColDatPermCF))){
+  for(j in 1: length(colnames(exprColDatPermCF)))
+if(exprColDatPermCF[i,j]>1)  {
+  df_temp[i,j] <- 1
+}
+  else(df_temp[i,j] <- 0)
+}
+df_temp <- as.data.frame(df_temp)
+row.names(df_temp) <- row.names(exprColDatPermCF)
+colnames(df_temp) <- colnames(exprColDatPermCF)
+df_temp$sum1 <- rowSums(df_temp)
+df_temp1<- subset(df_temp, df_temp$sum1>8)
+dim(df_temp1)
+
+exprColDatPermCF_1 <- exprColDatPermCF[row.names(exprColDatPermCF)%in%row.names(df_temp1),]
+```
+
+```{r}
+QCFedgeR <- edgeROut(exprColDatPermCF_1, colDatPermCF, "BH_Colon_Exam", "Lane")
+
+ibs_CF_HC_fdr05 <- subset(QCFedgeR, QCFedgeR$FDR<0.05); dim(ibs_CF_HC_fdr05)
+ibs_CF_HC_fdr10 <- subset(QCFedgeR, QCFedgeR$FDR<0.10); dim(ibs_CF_HC_fdr10)
+ibs_CF_HC_p005  <- subset(QCFedgeR, QCFedgeR$PValue<0.005); dim(ibs_CF_HC_p005)
+
+```
+
+```{r}
+QCFResTjp <- data.frame(QCFedgeR[QCFedgeR$Gene_Symbol%in%tjp,])
+row.names(QCFResTjp) <- QCFResTjp[,6]
+QCFResTjp <- QCFResTjp[,-c(2,3,5,6)]
+colnames(QCFResTjp) <- paste("CF_HC",colnames(QCFResTjp), sep = "_")
+write.csv(QCFResTjp, file = "C:/Users/swapnajoshi-admin/Documents/GIT_workspace/IBSinetstinalPermeabilityProject/temp/QCFResTjp.csv")
+```
+
+# Bowel habit differences (IBS-C vs HC) men
+
+```{r}
+colDatPermCM <- subset(colDatPerm, colDatPerm$BH_Colon_Exam=="C" & colDatPerm$Sex==1 |colDatPerm$BH_Colon_Exam=="N" & colDatPerm$Sex==1)
+table(colDatPermCM$BH_Colon_Exam); #smaller group has 10 subjects
+colDatPermCM$BH_Colon_Exam <- factor(colDatPermCM$BH_Colon_Exam)
+colDatPermCM$BH_Colon_Exam <- relevel(colDatPermCM$BH_Colon_Exam, ref = "N")
+exprColDatPermCM <- exprColDatPerm[,colnames(exprColDatPerm)%in%row.names(colDatPermCM)]
+df_temp <- matrix(NA, ncol=dim(exprColDatPermCM)[2], nrow=dim(exprColDatPermCM)[1])
+for ( i in 1: length(rownames(exprColDatPermCM))){
+  for(j in 1: length(colnames(exprColDatPermCM)))
+if(exprColDatPermCM[i,j]>1)  {
+  df_temp[i,j] <- 1
+}
+  else(df_temp[i,j] <- 0)
+}
+
+df_temp <- as.data.frame(df_temp)
+row.names(df_temp) <- row.names(exprColDatPermCM)
+colnames(df_temp) <- colnames(exprColDatPermCM)
+df_temp$sum1 <- rowSums(df_temp)
+df_temp1<- subset(df_temp, df_temp$sum1>3)
+dim(df_temp1)
+
+exprColDatPermCM_1 <- exprColDatPermCM[row.names(exprColDatPermCM)%in%row.names(df_temp1),]
+```
+
+```{r}
+QCMedgeR <- edgeROut(exprColDatPermCM_1, colDatPermCM, "BH_Colon_Exam", "Lane")
+
+ibs_CM_HC_fdr05 <- subset(QCMedgeR, QCMedgeR$FDR<0.05); dim(ibs_CM_HC_fdr05)
+ibs_CM_HC_fdr10 <- subset(QCMedgeR, QCMedgeR$FDR<0.10); dim(ibs_CM_HC_fdr10)
+ibs_CM_HC_p005  <- subset(QCMedgeR, QCMedgeR$PValue<0.005); dim(ibs_CM_HC_p005)
+
+```
+
+```{r}
+QCMResTjp <- data.frame(QCMedgeR[QCMedgeR$Gene_Symbol%in%tjp,])
+row.names(QCMResTjp) <- QCMResTjp[,6]
+QCMResTjp <- QCMResTjp[,-c(2,3,5,6)]
+colnames(QCMResTjp) <- paste("CM_HC",colnames(QCMResTjp), sep = "_")
+write.csv(QCMResTjp, file = "C:/Users/swapnajoshi-admin/Documents/GIT_workspace/IBSinetstinalPermeabilityProject/temp/QCMResTjp.csv")
+```
+
+```{r}
+TJP_BH_sex <- merge(QCFResTjp, QCMResTjp, by = 'row.names', all = TRUE)
+row.names(TJP_BH_sex) <- TJP_BH_sex[,1]
+TJP_BH_sex <-  TJP_BH_sex[,-1]
+TJP_BH_sex <- merge(TJP_BH_sex, QDFResTjp, by = 'row.names', all = TRUE)
+row.names(TJP_BH_sex) <- TJP_BH_sex[,1]
+TJP_BH_sex <-  TJP_BH_sex[,-1]
+TJP_BH_sex <- merge(TJP_BH_sex, QDMResTjp, by = 'row.names', all = TRUE)
+row.names(TJP_BH_sex) <- TJP_BH_sex[,1]
+TJP_BH_sex <-  TJP_BH_sex[,-1]
+write.csv(TJP_BH_sex, file = "C:/Users/swapnajoshi-admin/Documents/GIT_workspace/IBSinetstinalPermeabilityProject/temp/TJP_BH_sex.csv")
+```
+
+```{r}
+save(QDxResedgeR,QSexResedgeR,QIntResedgeR,QDedgeR,QCedgeR,QDFedgeR,QDMedgeR,QCFedgeR,QCMedgeR, file = "C:/Users/swapnajoshi-admin/Documents/GIT_workspace/IBSinetstinalPermeabilityProject/temp/QDxResedgeR.Rda")
+```
+
+## correlation between permeability measures and gene expression
+
+```{r}
+exprColDatPermTjp <- exprColDatPerm[row.names(exprColDatPerm)%in%featureData[featureData$V2 %in% tjp,][,1],]; dim(exprColDatPermTjp)
+
+exprColDatPermTjp <- exprColDatPermTjp[featureData[featureData$V2 %in% tjp,][,1],]
+row.names(exprColDatPermTjp) <- featureData[featureData$V2 %in% tjp,][,2]
+per <- per[colnames(exprColDatPermTjp),]
+all.equal(row.names(per),colnames(exprColDatPermTjp))
+df_ge <- cbind(t(exprColDatPermTjp), per)
+df_ge1 <- df_ge[,c(1:28,31:36,37,40,41)]
+save(df_ge1,exprColDatPerm, colDatPerm,tjp,file = "C:/Users/swapnajoshi-admin/Box Sync/IBSinetstinalPermeabilityProject/data/consitstantData/per_tjp_dat.Rda")
+```
+
+```{r}
+library(Hmisc)
+df_ge1     <- na.omit(df_ge1)
+cor1       <- rcorr(as.matrix(df_ge1[,1:34]), type="spearman")
+corP       <- cor1$P[1:28,29:34]
+corR       <- cor1$r[1:28,29:34]
+sigCorP    <- corP[apply(corP, 1, function(row) {any(row <0.05)}),]; dim(sigCorP)
+sigCor     <- corR[row.names(corR)%in%row.names(sigCorP),     colnames(corR)%in%colnames(sigCorP)]
+if(dim(sigCor)[1]>0) {df_ge1_sig <- df_ge1[, colnames(df_ge1)%in%c(row.names(sigCorP), colnames(sigCorP))]
+dim(df_ge1_sig)}; 
+
+df_ge_f    <- subset(df_ge1, df_ge1$Sex=="F")
+corF1      <- rcorr(as.matrix(df_ge_f[,1:34]), type="spearman")
+corFP      <- corF1$P[1:28,29:34]
+corFR      <- corF1$r[1:28,29:34]
+sigCorFP   <- corFP[apply(corFP, 1, function(row) {any(row <0.05)}),];dim(sigCorFP)
+sigCorFP   <- na.omit(sigCorFP)
+sigCorF    <- corFR[row.names(corFR)%in%row.names(sigCorFP),     colnames(corFR)%in%colnames(sigCorFP)]
+if(dim(sigCorFP)[1]>0) {df_ge1_sigF <- df_ge_f[, colnames(df_ge_f)%in%c(row.names(sigCorFP), colnames(sigCorFP))]
+dim(df_ge1_sigF)}; 
+df_ge1_sigF$Dx <- df_ge_f$Dx
+write.csv(sigCorFP, file = "C:/Users/swapnajoshi-admin/Documents/GIT_workspace/IBSinetstinalPermeabilityProject/temp/sigCorperm_tjpGenes_FP.csv")
+
+df_ge_m    <- subset(df_ge1, df_ge1$Sex=="M")
+corM1      <- rcorr(as.matrix(df_ge_m[,1:34]), type="spearman")
+corMP      <- corM1$P[1:28,29:34]
+corMR      <- corM1$r[1:28,29:34]
+sigCorMP   <- corMP[apply(corMP, 1, function(row) {any(row <0.05)}),];dim(sigCorMP)
+sigCorMP   <- na.omit(sigCorMP)
+sigCorM    <- corMR[row.names(corMR)%in%row.names(sigCorMP), colnames(corMR)%in%colnames(sigCorMP)]
+if(dim(sigCorMP)[1]>0) {df_ge1_sigM <- df_ge_m[, colnames(df_ge_m)%in%c(row.names(sigCorMP), colnames(sigCorMP))]
+dim(df_ge1_sigM)}; 
+df_ge1_sigM$Dx <- df_ge_m$Dx
+write.csv(sigCorMP, file = "C:/Users/swapnajoshi-admin/Documents/GIT_workspace/IBSinetstinalPermeabilityProject/temp/sigCorperm_tjpGenes_MP.csv")
+
+```
+
+# Correlation Plots
+
+```{r}
+
+for( i in 5: 10) {
+  for ( j in 1: 4) {
+ggsave(ggplot(df_ge1_sigF,aes(df_ge1_sigF[,i],df_ge1_sigF[,j])) + geom_point(aes(color=df_ge1_sigF$Dx), size= 3)+geom_smooth(method=lm)+xlab(colnames(df_ge1_sigF)[i])+ ylab(colnames(df_ge1_sigF)[j])+ ggtitle(paste("Females: Correlation between permeability and",colnames(df_ge1_sigF)[j],sep = " ")), file = paste(paste("C:/Users/swapnajoshi-admin/Documents/GIT_workspace/IBSinetstinalPermeabilityProject/temp/tjp_perm_corrplots/females", colnames(df_ge1_sigF)[i],sep = "/"), paste(colnames(df_ge1_sigF)[j],"png",sep = "."), sep = "_"))
+  }
+}    
+
+
+for( i in 7: 12) {
+  for ( j in 1: 6) {
+ggsave(ggplot(df_ge1_sigM,aes(df_ge1_sigM[,i],df_ge1_sigM[,j]))+geom_point(aes(color=df_ge1_sigM$Dx), size = 3)+geom_smooth(method=lm)+xlab(colnames(df_ge1_sigM)[i])+ ylab(colnames(df_ge1_sigM)[j])+ ggtitle(paste("Males: Correlation between permeability and",colnames(df_ge1_sigM)[j],sep = " ")), file = paste(paste("C:/Users/swapnajoshi-admin/Documents/GIT_workspace/IBSinetstinalPermeabilityProject/temp/tjp_perm_corrplots/males", colnames(df_ge1_sigF)[i],sep = "/"), paste(colnames(df_ge1_sigM)[j],"png",sep = "."), sep = "_"))
+  }
+} 
+
+```
+
+# Box plots
+
+```{r}
+ggplot(df_ge1,aes(as.factor(df_ge1$bowel.habits..Rome.III.),df_ge1$CHRM3), outlier.color = NA)+ geom_boxplot(outlier.shape=NA)+ stat_summary(fun.y=mean)+ geom_jitter(aes(color = df_ge1$Sex))+ylab("CHRM3 Expression")+ xlab("Bowel Habits")+ ggtitle("CHRM3 expression in IBS bowel habit subtypes")+ labs(caption = "p (C-N) = 0.003")
+
+ggplot(df_ge1,aes(as.factor(df_ge1$Dx),df_ge1$CHRM3), outlier.color = NA)+ geom_boxplot(outlier.shape=NA)+ stat_summary(fun.y=mean)+ geom_jitter(aes(color = df_ge1$Sex))+ylab("CHRM3 Expression")+ xlab("Group")+ ggtitle("CHRM3 expression between IBS and healthy controls")+ labs(caption = "p = 0.04")
+ df_ge1$ibsSexInt <- interaction(df_ge1$Dx, df_ge1$Sex)
+ggplot(df_ge1,aes(as.factor(df_ge1$ibsSexInt ),df_ge1$CHRM3), outlier.color = NA)+ geom_boxplot(outlier.shape=NA)+ stat_summary(fun.y=mean)+ geom_jitter(aes(color = df_ge1$Sex))+ylab("CHRM3 Expression")+ xlab("Group")+ ggtitle("CHRM3 expression between IBS and Sex interaction") # + labs(caption = "p = 0.04")
+
+```

@@ -1,0 +1,103 @@
+---
+title: "450k_pancreatic cancer normalization"
+author: "Swapna Mahurkar-Joshi"
+date: "August 16, 2016"
+output: html_document
+---
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+library(minfi)
+library(minfiData)
+library(sva)
+source("https://bioconductor.org/biocLite.R")
+biocLite("methylumi")
+library(methylumi)
+library("preprocessCore")
+```
+
+You can also embed plots, for example:
+
+```{r, echo=FALSE}
+setwd("C:/Users/swapnajoshi-admin/Documents/GIT_workspace/Panc_can_ucla/")
+
+
+# dat1 <- methylumiR("FinalReport1.csv")
+# normalizeMethyLumiSet(melon, beta.cuts = c(0.2, 0.8), mapfun = c("atan", "ratio"))
+
+dat<-read.delim("FinalReport1.csv", check.names=FALSE,sep=',')
+row.names(dat)<-dat[,1]
+ev<-seq(4,98,by=2)
+dat1<-dat[,ev]
+dim(dat1)
+normBeta <- normalize.quantiles(as.matrix(dat1),copy=TRUE)
+head(normBeta)
+row.names(normBeta) <- row.names(dat1)
+colnames(normBeta) <- colnames(dat1)
+```
+
+
+```{r}
+load("probesToMask.rda")
+probesToMask<-names(toMask)
+length(probesToMask) # 89512
+normBeta[row.names(normBeta)%in%probesToMask,]<-NA
+dim(normBeta)
+pan.dat<-normBeta[,c(1:35,45:48)]
+dim(pan.dat)
+# [1] 485577     39
+
+pan.dat<-na.omit(pan.dat)
+dim(pan.dat)
+# [1] 381206     39
+
+# remove snps and repeats and XY related probes 
+hm450=get450k()
+GeneSymbol <- getNearestGene(hm450)
+annot <- cbind(as.data.frame(hm450),GeneSymbol)
+chr.auto<-annot[-c(which(annot$seqnames=="chrX"),which(annot$seqnames=="chrY")),]
+dat1.xy<-pan.dat[row.names(pan.dat)%in%row.names(chr.auto),]
+dim(dat1.xy)
+# [1] 371478     39
+
+can1<-dat1.xy[,grep('PA',colnames(dat1.xy))]
+can2<-dat1.xy[,grep('PT',colnames(dat1.xy))]
+
+can<-cbind(can1,can2); dim(can1)
+nor<-dat1.xy[,!colnames(dat1.xy)%in%colnames(can)]; dim(nor)
+
+save(normBeta, dat1, pan.dat, annot, chr.auto, probesToMask, file="hm450_panCan_files1.Rda")
+save(annot, can, nor, file="hm450_panCan_files2.Rda")
+
+#import the files with xy probes removed and snp repeat probes removed and annotations
+
+load("hm450_panCan_files2.Rda")
+
+# remove suspected contaminated normals 
+
+cont<-c("8033.AVG_Beta","11841.AVG_Beta")
+
+nor1<-nor[,!colnames(nor)%in%cont]
+dim(nor1)
+# [1] 371486     17
+
+colnames(can)<-gsub(" PT.AVG_Beta","", colnames(can))
+colnames(can)<-gsub(" PA.AVG_Beta","", colnames(can))
+colnames(nor1)<-gsub(".AVG_Beta","", colnames(nor1))
+colnames(nor1)<-gsub(".AVG_Beta","", colnames(nor1))
+
+save(annot, can, nor1, file="hm450_panCan_files3.Rda")
+
+```
+
+```{r}
+
+```
+
+
+
+
+

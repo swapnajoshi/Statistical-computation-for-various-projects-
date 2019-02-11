@@ -1,0 +1,267 @@
+---
+title: "lisa_fodmap_582018"
+author: "Swapna Mahurkar-Joshi"
+date: "May 8, 2018"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r setup, include=FALSE}
+# Set working directory outside the chunks
+knitr::opts_knit$set(root.dir = normalizePath("C:/Users/swapnajoshi-admin/Documents/GIT_workspace/fodmap_study/lisa_fodmap/"))
+```
+
+```{r}
+require(ggplot2)
+library(reshape2)
+install.packages("nlme")
+library(nlme)
+```
+
+```{r}
+dat1    <- read.csv("C:/Users/swapnajoshi-admin/Documents/GIT_workspace/fodmap_study/lisa_fodmap/fodmap_swapna.csv")
+set3Avg <- read.csv("C:/Users/swapnajoshi-admin/Documents/GIT_workspace/fodmap_study/lisa_fodmap/set3AllDaily_avg_fodmap_swapna.csv")
+set3daily <- read.csv("C:/Users/swapnajoshi-admin/Documents/GIT_workspace/fodmap_study/lisa_fodmap/set3dayWise_fodmap_swapna.csv")
+
+datAll    <- read.csv("C:/Users/swapnajoshi-admin/Documents/GIT_workspace/fodmap_study/lisa_fodmap/lchang_fodmap_050918.csv", row.names = 1)
+```
+
+# Table 1: Clinical charachteristics of IBS patients
+
+```{r}
+tab1 <- cbind(round(apply(dat1[1:9,c(4,12,14, 16,17,35,37,39,42,45,56)],2,mean, na.rm = TRUE),2),round(apply(dat1[1:9,c(4,12,14,16,17,35,37,39,42,45,56)],2,sd, na.rm = TRUE),2),round(apply(dat1[10:13,c(4,12,14,16,17,35,37,39,42,45,56)],2,mean, na.rm = TRUE),2),round(apply(dat1[10:13,c(4,12,14,16,17,35,37,39,42,45,56)],2,sd, na.rm = TRUE),2))
+colnames(tab1) <- c("Resp_Mean", "Resp_SD", "NonResp_Mean", "NonResp_SD")
+dat1[,7] <- as.factor(dat1[,7])
+tab1 <- rbind(tab1,c(round((table(dat1[1:9,7])[2]/(table(dat1[1:9,7])[2] + table(dat1[1:9,7])[1]))*100,2),NA,round((table(dat1[10:13,7])[2]/(table(dat1[10:13,7])[2] + table(dat1[10:13,7])[1]))*100,2),NA))
+row.names(tab1)[12] <- "Female%"
+tab1
+
+```
+# Adding p values
+
+```{r}
+t_p <- function (modelobject) {
+     p <- modelobject$p.value
+    return(p)
+}
+
+dat1$Adequate_Relief_2 <- as.factor(dat1$Adequate_Relief_2)
+dat2 <- dat1[1:13,c(4,12,13,14, 16,17,35,37,39,42,45,56)]
+comb1          <- expand.grid(names(dat2),"Adequate_Relief_2")
+
+models     <- lapply(paste(comb1[,1],comb1[,2], sep = "~"), formula)
+models <- models[-3]
+res.models <- lapply(models, FUN = function(x) {t.test(formula = x, data = dat2)})
+# names(res.models) <- paste(comb1[,1],comb1[,2], sep = "~")
+tab1 <- as.data.frame(tab1)
+tab1$p <- NA
+
+tab1[1:11,5] <- round(t(data.frame(lapply(res.models, FUN = t_p))),5)[,1]
+colnames(table1) <- c("IBS (N=109)","Healthy Controls (N=36)", "t.test p-value")
+table2 <- matrix(as.numeric(as.character(table1)), nrow = 16, ncol = 3)
+row.names(table2) <- row.names(table1)
+colnames(table2) <- colnames(table1)
+table2 <-  as.data.frame(table2)
+table2[c(5,6,14),c(2,3)] <- "-"
+# Fisher test for sex and bowel habits
+fisher.test(metDat_p$Group, metDat_p$Sex)
+table2[3,3] <- 0.168
+ibsBHper    <- c(round(table(ibs$BH)[1]/dim(ibs)[1]*100,2),round(table(ibs$BH)[2]/dim(ibs)[1]*100,2),round(table(ibs$BH)[3]/dim(ibs)[1]*100,2),round(table(ibs$BH)[4]/dim(ibs)[1]*100,2))
+table2[3,1] <- paste(paste("IBS-C",ibsBHper[1],sep = "="),paste("IBS-D",ibsBHper[2],sep = "="),paste("IBS-M",ibsBHper[3],sep = "="), sep=",")
+
+kable(table2,align=c(rep('c', 16)), caption = "Table1: Clinical Characteristics of IBS Patients and HCs")
+table(as.factor(dat1[1:13,7]), as.factor(as.factor(dat1[1:13,13])))
+fisher.test(table(as.factor(dat1[1:13,7]), as.factor(as.factor(dat1[1:13,13]))))
+```
+
+# Plot 1: IBSSS trends in responder and non responder 
+
+```{r}
+dat1$Visit <- as.factor(dat1$Visit)
+# dat1$Gender <- as.factor(ifelse(dat1$Sex == 1, "Male", "Female"))
+dat1$Responder <- as.factor(ifelse(dat1$Adequate_Relief_2 == 1, "Responder", "Non-responder"))
+dat1$Responder1 <- relevel(as.factor(dat1$Responder), ref = "Responder")
+p <- ggplot(data = dat1[1:26,], aes(x = Visit, y = IBSSS_severity_1, group = NDPNum))
+# p + geom_point()
+# p + geom_line()
+q <- p + geom_line(size = 1.1) + stat_summary(aes(group = 1), geom = "point", fun.y = mean, shape = 17, size = 3) + facet_grid(. ~ Responder1) + theme(axis.text=element_text(size=12), axis.title=element_text(size=16), strip.text.x = element_text(size = 16))+ ylab ("IBSSS Score") + stat_smooth(aes(group = 1), method = "lm", formula = y ~  x * I(x > 1), se = FALSE)
+
+ggsave(q, file = "C:/Users/swapnajoshi-admin/Documents/GIT_workspace/fodmap_study/lisa_fodmap/responder_ibssss_facet1.png")
+q
+
+##### no factes colors for responders
+
+p <- ggplot(data = dat1[1:26,], aes(x = Visit, y = IBSSS_severity_1, group = NDPNum))
+# p + geom_point()
+q <- p + geom_line(size = 1.5, aes(color = Responder)) + stat_summary( aes(group = 1),geom = "point", fun.y = mean, shape = 17, size = 3)  + theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=16), strip.text.x = element_text(size = 16))+ ylab ("IBSSS Score")
+ggsave(q, file = "C:/Users/swapnajoshi-admin/Documents/GIT_workspace/fodmap_study/lisa_fodmap/responder_ibssss_color.png")
+q
+```
+
+```{r}
+
+p <- ggplot(data = dat1[1:26,], aes(x = Visit, y = IBSSS_severity_1, fill = Responder1))
+q <- p + geom_boxplot() + theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=16)) + ylab ("IBSSS Score")
+ggsave(q, file = "C:/Users/swapnajoshi-admin/Documents/GIT_workspace/fodmap_study/lisa_fodmap/responder_ibssss_boxplot1.png")
+q
+```
+
+# P value for change in ibsss after controling for HAD
+
+```{r}
+dat2 <- dat1[1:26,]
+dat2$Visit <- factor(dat2$Visit)
+dat3 <- dat1[14:26,]
+
+fit1 <- lm(IBSSS_2_Change ~ 0 + IBSSS_severity_1 + Responder , data=dat3)
+summary(fit1)
+
+fit1 <- lm(IBSSS_2_Change ~ 0 + IBSSS_severity_1 + Responder + HAD_Anxiety_1, data=dat3)
+summary(fit1)
+
+```
+
+# inverted plot for change in IBS-SSS
+
+```{r}
+p <- ggplot(data = dat1[14:26,], aes(x = Responder, y = IBSSS_2_Change, fill = Responder))
+q <- p + geom_boxplot() + theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=16)) + ylab ("Change in IBSSS Score") + scale_y_reverse()
+ggsave(q, file = "C:/Users/swapnajoshi-admin/Documents/GIT_workspace/fodmap_study/lisa_fodmap/responder_ibssss_boxplot_reverse.png")
+q
+```
+
+# set 3 data
+
+```{r}
+# set3daily$Set <- as.numeric(as.character(set3daily$Set))
+# set3daily$Day <- as.factor(set3daily$Day)
+# set3daily$Overall_GI_Sx_4h_S1D1_AllDaily <- as.numeric(set3daily$Overall_GI_Sx_4h_S1D1_AllDaily)
+# 
+# set3daily1 <- set3daily[,c(1,2,3,5,12)]
+# set3daily1[1:9,5] <- c(rep(0,9))
+# set3daily2 <- na.omit(set3daily1)
+
+# Subject A6878 should have stopped at dose 3; remove dose 4 data
+set3Avg$Randomization <- dat1$Randomization[1:9]
+set3Avg1 <- set3Avg[,c(5,10,1,3,12)]
+set3Avg1[45,c(1,2)] <- NA
+p <- ggplot(set3Avg1, aes(x=Set, y=avg_vas_AllDaily, color=factor(Randomization), group = NDPNum)) 
+  # geom_line() +
+  # geom_point() 
+  # facet_grid(workhr_bin ~ .)
+q <- p + geom_line(size = 1.5) + geom_point() + theme(axis.text=element_text(size=12),  axis.title=element_text(size=16))+ ylab ("VAS")
+
+print(q)
+ggsave(q, file = "C:/Users/swapnajoshi-admin/Documents/GIT_workspace/fodmap_study/lisa_fodmap/dose_VAS_new.png", width = 8, height = 6, units = "in")
+
+
+p <- ggplot(set3Avg1, aes(x=Set, y=avg_vas_AllDaily, color=factor(Randomization), group = NDPNum)) 
+  # geom_line() +
+  # geom_point() 
+  
+q <- p + geom_line(size = 1.5) + geom_point() + theme(axis.text=element_text(size=12),  axis.title=element_text(size=16))+ ylab ("VAS") + facet_grid(Randomization ~ .)
+
+print(q)
+ggsave(q, file = "C:/Users/swapnajoshi-admin/Documents/GIT_workspace/fodmap_study/lisa_fodmap/dose_VAS_facets.png")
+
+```
+# VAS change 
+
+```{r}
+
+set3Avg2 <- set3Avg1[10:45,]
+set3Avg2$Set <- factor(set3Avg2$Set)
+p <- ggplot(set3Avg2, aes(x=Set, y=SetAvg_VAS_Change_AllDaily, color=factor(Randomization), group = NDPNum)) 
+  # geom_line() +
+  # geom_point() 
+  
+q <- p + geom_line(size = 1.5) + geom_point() + theme(axis.text=element_text(size=12),  axis.title=element_text(size=16))+ ylab ("Change in VAS from baseline") + facet_grid(Randomization ~ .)
+
+print(q)
+ggsave(q, file = "C:/Users/swapnajoshi-admin/Documents/GIT_workspace/fodmap_study/lisa_fodmap/dose_VAS_Change_facets.png")
+
+```
+
+# % that tolerated reintroduction
+
+```{r}
+set3Avg$Tolerated <- as.factor(ifelse(set3Avg$abs_vas_change<20, 1,0))
+
+p <- ggplot(data = set3Avg[10:45,], aes(x = Randomization, fill = Tolerated))
+q <- p + geom_bar(position=position_dodge()) + theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=16))
+ggsave(q, file = "C:/Users/swapnajoshi-admin/Documents/GIT_workspace/fodmap_study/lisa_fodmap/responder_ibssss_boxplot.png")
+q
+```
+```{r}
+table(set3Avg$Tolerated); 26/34
+table(subset(set3Avg, set3Avg$Set==1 & set3Avg$Randomization=="A")$Tolerated)
+table(subset(set3Avg, set3Avg$Set==1 & set3Avg$Randomization=="B")$Tolerated)
+table(subset(set3Avg, set3Avg$Set==1 & set3Avg$Randomization=="C")$Tolerated)
+
+table(subset(set3Avg, set3Avg$Set==2 & set3Avg$Randomization=="A")$Tolerated)
+table(subset(set3Avg, set3Avg$Set==2 & set3Avg$Randomization=="B")$Tolerated)
+table(subset(set3Avg, set3Avg$Set==2 & set3Avg$Randomization=="C")$Tolerated)
+
+table(subset(set3Avg, set3Avg$Set==3 & set3Avg$Randomization=="A")$Tolerated)
+table(subset(set3Avg, set3Avg$Set==3 & set3Avg$Randomization=="B")$Tolerated)
+table(subset(set3Avg, set3Avg$Set==3 & set3Avg$Randomization=="C")$Tolerated)
+
+table(subset(set3Avg, set3Avg$Set==4 & set3Avg$Randomization=="A")$Tolerated)
+table(subset(set3Avg, set3Avg$Set==4 & set3Avg$Randomization=="B")$Tolerated)
+table(subset(set3Avg, set3Avg$Set==4 & set3Avg$Randomization=="C")$Tolerated)
+
+
+table(subset(set3Avg, set3Avg$Randomization=="A")$Tolerated)
+table(subset(set3Avg, set3Avg$Randomization=="B")$Tolerated)
+table(subset(set3Avg, set3Avg$Randomization=="C")$Tolerated)
+
+```
+
+# Average VAS scores at each dosage for each solution group
+
+```{r}
+mean(subset(set3Avg, set3Avg$Set==1 & set3Avg$Randomization=="A")$avg_vas_AllDaily, na.rm = TRUE)
+mean(subset(set3Avg, set3Avg$Set==2 & set3Avg$Randomization=="A")$avg_vas_AllDaily, na.rm = TRUE)
+mean(subset(set3Avg, set3Avg$Set==3 & set3Avg$Randomization=="A")$avg_vas_AllDaily, na.rm = TRUE)
+mean(subset(set3Avg, set3Avg$Set==4 & set3Avg$Randomization=="A")$avg_vas_AllDaily, na.rm = TRUE)
+
+mean(subset(set3Avg, set3Avg$Set==1 & set3Avg$Randomization=="B")$avg_vas_AllDaily, na.rm = TRUE)
+mean(subset(set3Avg, set3Avg$Set==2 & set3Avg$Randomization=="B")$avg_vas_AllDaily, na.rm = TRUE)
+mean(subset(set3Avg, set3Avg$Set==3 & set3Avg$Randomization=="B")$avg_vas_AllDaily, na.rm = TRUE)
+mean(subset(set3Avg, set3Avg$Set==4 & set3Avg$Randomization=="B")$avg_vas_AllDaily, na.rm = TRUE)
+
+mean(subset(set3Avg, set3Avg$Set==1 & set3Avg$Randomization=="C")$avg_vas_AllDaily, na.rm = TRUE)
+mean(subset(set3Avg, set3Avg$Set==2 & set3Avg$Randomization=="C")$avg_vas_AllDaily, na.rm = TRUE)
+mean(subset(set3Avg, set3Avg$Set==3 & set3Avg$Randomization=="C")$avg_vas_AllDaily, na.rm = TRUE)
+mean(subset(set3Avg, set3Avg$Set==4 & set3Avg$Randomization=="C")$avg_vas_AllDaily, na.rm = TRUE)
+
+a <- as.data.frame(cbind(dat2$Overall_GI_Sx_24h_1[14:22], as.character(dat2$Randomization[14:22])))
+a <- a[order(a$V2),]
+```
+
+```{r}
+
+
+mean(subset(set3Avg2, set3Avg2$Set==1 & set3Avg2$Randomization=="A")$SetAvg_VAS_Change_AllDaily, na.rm = TRUE)
+mean(subset(set3Avg2, set3Avg2$Set==2 & set3Avg2$Randomization=="A")$SetAvg_VAS_Change_AllDaily, na.rm = TRUE)
+mean(subset(set3Avg2, set3Avg2$Set==3 & set3Avg2$Randomization=="A")$SetAvg_VAS_Change_AllDaily, na.rm = TRUE)
+mean(subset(set3Avg2, set3Avg2$Set==4 & set3Avg2$Randomization=="A")$SetAvg_VAS_Change_AllDaily, na.rm = TRUE)
+
+mean(subset(set3Avg2, set3Avg2$Set==1 & set3Avg2$Randomization=="B")$SetAvg_VAS_Change_AllDaily, na.rm = TRUE)
+mean(subset(set3Avg2, set3Avg2$Set==2 & set3Avg2$Randomization=="B")$SetAvg_VAS_Change_AllDaily, na.rm = TRUE)
+mean(subset(set3Avg2, set3Avg2$Set==3 & set3Avg2$Randomization=="B")$SetAvg_VAS_Change_AllDaily, na.rm = TRUE)
+mean(subset(set3Avg2, set3Avg2$Set==4 & set3Avg2$Randomization=="B")$SetAvg_VAS_Change_AllDaily, na.rm = TRUE)
+
+mean(subset(set3Avg2, set3Avg2$Set==1 & set3Avg2$Randomization=="C")$SetAvg_VAS_Change_AllDaily, na.rm = TRUE)
+mean(subset(set3Avg2, set3Avg2$Set==2 & set3Avg2$Randomization=="C")$SetAvg_VAS_Change_AllDaily, na.rm = TRUE)
+mean(subset(set3Avg2, set3Avg2$Set==3 & set3Avg2$Randomization=="C")$SetAvg_VAS_Change_AllDaily, na.rm = TRUE)
+mean(subset(set3Avg2, set3Avg2$Set==4 & set3Avg2$Randomization=="C")$SetAvg_VAS_Change_AllDaily, na.rm = TRUE)
+```
+

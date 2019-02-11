@@ -1,0 +1,1028 @@
+---
+title: "Permeability06202016"
+author: "Swapna Mahurkar-Joshi"
+date: "June 20, 2016"
+output: word_document
+---
+Notes: 
+
+I is for Isc: short circuit current. It represents the secretory properties of the epithelium.
+
+G is the conductance, inverse of the resistance (R). Some people prefer to report G instead of R, although both are indicative of the same thing. It's basically representing the tightness of the epithelial barrier and can depend on the flux of ion. So it's an indication of the paracellular permeability of ions.
+
+FD4 is a small fluorescence dye we use to assess paracellular permeability. We put it on the mucosal side of the biopsy and collect at regular interval from the serosal side. FD4 [ ] is the final concentration of FD4 on the serosal side of the chambers after 2h of experiment. It's representing how much of this molecule went through the mucosa. It's telling us how permeable to small uncharged molecule the epithelium is and is a measure of the leak pathway.
+
+FD4 slope, is the data we get by graphing the concentration of FD4 in the serosal chamber at the different times of collection (every 30 min over 2h). Tells us the speed at which the FD4 goes through the mucosa.
+
+# import permeabilty data
+
+```{r, message=F, warning=F}
+# library(phyloseq)
+library("ggplot2")
+library("scales")
+library("grid")
+library("ape")
+# library(phytools)
+# library("dada2")
+
+setwd("C:/Users/swapnajoshi-admin/Documents/GIT_workspace/InetstinalPermeability")
+ 
+per <- read.csv("IBS HC biopsies bilan_122116.csv", sep = ",", row.names = 1); dim(per)
+# colnames(per)[c(4,8)] <- c("Sex", "FD4")
+per$bowel.habits <- gsub("U","M",per$bowel.habits)
+
+# remove out liers as indicated in the original excel sheet
+per$I[per$I>= 200| per$I<= 5] <- NA
+per$G[per$G>= 200| per$G<= 5] <- NA
+per$R[per$R>= 200| per$R<= 5] <- NA
+per$Dx <- ifelse(per$bowel.habits== "C","IBS",ifelse(per$bowel.habits=="D","IBS",ifelse(per$bowel.habits=="M","IBS","HC")))
+
+```
+
+# T-test IBS and healthy controls
+
+```{r, message=F, warning=F}
+lmp <- function (modelobject) {
+    if (class(modelobject) != "lm") stop("Not an object of class 'lm' ")
+    f <- summary(modelobject)$fstatistic
+    p <- pf(f[1],f[2],f[3],lower.tail=F)
+    attributes(p) <- NULL
+    return(p)
+}
+
+write.table(per, file = "permeability_data.txt", sep="\t")
+df1 <- as.data.frame(per[,c(2,3,4:9,12,13)])
+# df1 <- df1[-18,]
+fit1 <- lm(G~Dx*Gender, data = df1)
+summary(fit1)
+lmp(fit1)
+# 0.0004976089
+
+fit1 <- lm(G~Dx, data = df1)
+summary(fit1)
+lmp(fit1)
+#0.235
+
+fit1 <- lm(G~Gender, data = df1)
+summary(fit1)
+lmp(fit1)
+# [1] 0.002172
+
+
+fun1 <- lapply(1:3,function(i){ y <- paste0('trait',i)
+     x <- paste0('Dx',i)
+     LHS <- paste(x,'Gender',sep='*')
+     form <- as.formula(paste(G, "~",LHS)
+                        lm(formula = form, data = df1)
+    })
+     
+     
+p.lm.dx <- t(sapply(df1[,c(2:7)], lmp))
+
+
+ttest.all.tp <- function (x) { z<-t.test(x ~ df1$Dx)$p.value
+a <- t.test(x ~ df1$Dx)$statistic
+b <- cbind(z,a)
+return(b)}
+
+p.df<- t(sapply(df1[,c(2:7)], ttest.all.tp))
+colnames(p.df) <- c("p value", "T-statistic")
+p.df
+# I         0.563683517   0.5872778
+# G         0.001129131  -3.6434499
+# R         0.020752929   2.6286737
+# CCh       0.633469131  -0.4879331
+# FD4       0.004565584  -3.0034124
+# FD4.slope 0.005347327  -2.9419889
+```
+
+Interaction Gender and Dx
+```{r}
+df1$Interaction1 <- interaction(df1$Dx,df1$Gender)
+summary(aov(df1$I~ df1$Interaction1))
+
+summary(aov(df1$G~ df1$Interaction1))
+RR# 0.00357
+
+summary(aov(df1$R~ df1$Interaction1))
+# 1.28e-05 ***
+
+summary(aov(df1$CCh~ df1$Interaction1))
+#0.835
+
+```
+
+# T-test men and women
+
+```{r, message=F, warning=F}
+
+## Men
+df.m <- as.data.frame(per[per$Gender=="M",c(2:9,12,13)])
+ttest.all.tp <- function (x) { z<-t.test(x ~ df.m$Dx)$p.value
+a <- t.test(x ~ df.m$Dx)$statistic
+b <- cbind(z,a)
+return(b)}
+p.df<- t(sapply(df.m[,-c(8,9,10)], ttest.all.tp))
+colnames(p.df) <- c("p value", "T-statistic")
+p.df
+# p value T-statistic
+# Age       0.773348848   0.2970628
+# I         0.319176688   1.0411188
+# G         0.006256202  -3.2421084
+# R         0.007100520   3.2537889
+# CCh       0.681217331   0.4228133
+# FD4       0.059480391  -2.0513352
+# FD4.slope 0.024761828  -2.5236776
+
+## women
+df.f <- as.data.frame(per[per$Gender=="F",c(2:9,12,13)])
+ttest.all.tp <- function (x) { z<-t.test(x ~ df.f$Dx)$p.value
+a <- t.test(x ~ df.f$Dx)$statistic
+b <- cbind(z,a)
+return(b)}
+
+p.df<- t(sapply(df.f[,-c(8,9,10)], ttest.all.tp))
+colnames(p.df) <- c("p value", "T-statistic")
+p.df
+#              p value T-statistic
+# Age       0.25659346  -1.1781891
+# I         0.61819835   0.5578089
+# G         0.06400948  -2.0041367
+# R         0.70625691   0.3875993
+# CCh       0.57299810  -0.6110097
+# FD4       0.05695566  -2.0161671
+# FD4.slope 0.07557439  -1.8770971
+```
+
+# ANOVA bowel habit
+
+```{r, message=F, warning=F}
+
+df1.ibs <- as.data.frame(per[per$Dx=="IBS",c(2:9,12,13)])
+# df1 <- df1[-18,]
+aov.all.tp <- function (x) { z<-summary(aov(x ~ df1.ibs$bowel.habits))[[1]][["Pr(>F)"]][[1]]
+a <- summary(aov(x ~ df1.ibs$bowel.habits))[[1]][['F value']][[1]]
+b <- cbind(z,a)
+return(b)}
+colnames(p.df) <- c("p value", "F-statistic")
+p.df<- t(sapply(df1.ibs[,c(1:7)], aov.all.tp))
+p.df
+#  [,1]      [,2]
+# Age       0.379192952 1.0006862
+# I         0.645182431 0.4446862
+# G         0.514242579 0.6800240
+# R         0.448997643 0.8224958
+# CCh       0.002962575 7.0657516
+# FD4       0.179160515 1.8184737
+# FD4.slope 0.303042803 1.2410639
+```
+```{r}
+# df1.ibs gender differnces (within patients)
+
+ttest.all.tp <- function (x) { z<-t.test(x ~ df1.ibs$Gender)$p.value
+a <- t.test(x ~ df1.ibs$Gender)$statistic
+b <- cbind(z,a)
+return(b)}
+p.df<- t(sapply(df1.ibs[,-c(8,9,10)], ttest.all.tp))
+colnames(p.df) <- c("p value", "T-statistic")
+p.df
+# p value T-statistic
+# Age       0.594922352  -0.5427329
+# I         0.226720732   1.2368225
+# G         0.028452401   2.3187659
+# R         0.126607432  -1.6002592
+# CCh       0.542615084   0.6168435
+# FD4       0.006766561   2.8956910
+# FD4.slope 0.012931394   2.6395100
+> 
+
+
+df1.hc <- as.data.frame(per[per$Dx=="HC",c(2:9,12,13)])
+ttest.all.tp <- function (x) { z<-t.test(x ~ df1.hc$Gender)$p.value
+a <- t.test(x ~ df1.hc$Gender)$statistic
+b <- cbind(z,a)
+return(b)}
+p.df<- t(sapply(df1.hc[,-c(8,9,10)], ttest.all.tp))
+colnames(p.df) <- c("p value", "T-statistic")
+p.df
+#               p value T-statistic
+# Age       0.258240352  -1.2472137
+# I         0.551450327   0.6768987
+# G         0.005351960   4.3521725
+# R         0.001473566  -4.8112800
+# CCh       0.645600377  -0.4987990
+# FD4       0.021825862   2.9572880
+# FD4.slope 0.044380250   2.4969007
+
+# Controling for gender, the effect goes away
+# Dx control for Gender
+summary(lm(per$I ~ per$Dx*per$Gender))
+# 0.588
+summary(lm(per$G ~ per$Dx*per$Gender))
+#  0.235
+summary(lm(per$R ~ per$Dx*per$Gender))
+# 0.82005
+summary(lm(per$CCh ~ per$Dx*per$Gender))
+# 0.508 
+summary(lm(per$FD4 ~ per$Dx*per$Gender))
+# 0.19433 
+summary(lm(per$FD4.slope ~ per$Dx*per$Gender))
+# 0.21218
+```
+
+
+```{r}
+# Gender only
+summary(lm(per$I ~ per$Gender))
+#0.499
+summary(lm(per$G ~ per$Gender))
+# 0.000471
+summary(lm(per$R ~ per$Gender))
+# 0.00011
+summary(lm(per$CCh ~ per$Gender))
+# 0.633
+summary(lm(per$FD4 ~ per$Gender))
+#  0.00982
+summary(lm(per$FD4.slope ~ per$Gender))
+# 0.0225
+summary(lm(per$I ~ per$Gender))
+# 0.499
+```
+
+```{r}
+# Clinica traits
+perMap <- read.csv("C:/Users/swapnajoshi-admin/Documents/GIT_workspace/InetstinalPermeability/sjoshi_permameablity_newsamples_112816.csv", row.names =1)
+
+comPer <- perMap[row.names(perMap)%in%row.names(df1.ibs),];dim(comPer)
+df1.ibs.com <- df1.ibs[row.names(df1.ibs)%in%row.names(comPer),]; dim(df1.ibs.com)
+comPer <- comPer[row.names(df1.ibs.com),]
+match(row.names(comPer), row.names(df1.ibs.com))
+df1.ibs.com$AbdominalPain <- comPer$BSQ_AbdPain
+df1.ibs.com$Bloating <- comPer$BSQ_Bloating
+df1.ibs.com$AbSxIntensity24h <- comPer$AbSxIntensity24h
+df1.ibs.com$AbSxIntensity_po_2<- comPer$AbSxIntensity_po_2
+
+summary(lm(df1.ibs.com$I~df1.ibs.com$AbdominalPain*df1.ibs.com$Gender))
+# 0.40798
+
+summary(lm(df1.ibs.com$G~df1.ibs.com$AbdominalPain*df1.ibs.com$Gender))
+# 0.368
+
+summary(lm(df1.ibs.com$R~df1.ibs.com$AbdominalPain*df1.ibs.com$Gender))
+# 0.417
+
+summary(lm(df1.ibs.com$CCh~df1.ibs.com$AbdominalPain*df1.ibs.com$Gender))
+# 0.01175*
+
+summary(lm(df1.ibs.com$FD4~df1.ibs.com$AbdominalPain*df1.ibs.com$Gender))
+# 0.71895
+
+summary(lm(df1.ibs.com$FD4.slope~df1.ibs.com$AbdominalPain*df1.ibs.com$Gender))
+# 0.3357
+#########
+summary(lm(df1.ibs.com$I~df1.ibs.com$AbSxIntensity24h*df1.ibs.com$Gender))
+# 0.97284
+
+summary(lm(df1.ibs.com$G~df1.ibs.com$AbSxIntensity24h*df1.ibs.com$Gender))
+# 0.119
+
+summary(lm(df1.ibs.com$R~df1.ibs.com$AbSxIntensity24h*df1.ibs.com$Gender))
+# 0.256
+
+summary(lm(df1.ibs.com$CCh~df1.ibs.com$AbSxIntensity24h*df1.ibs.com$Gender))
+# 0.0216*
+
+summary(lm(df1.ibs.com$FD4~df1.ibs.com$AbSxIntensity24h*df1.ibs.com$Gender))
+# 0.72292
+
+summary(lm(df1.ibs.com$FD4.slope~df1.ibs.com$AbSxIntensity24h*df1.ibs.com$Gender))
+# 0.7143
+
+#########
+summary(lm(df1.ibs.com$I~df1.ibs.com$AbSxIntensity_po_2*df1.ibs.com$Gender))
+# 0.8733
+
+summary(lm(df1.ibs.com$G~df1.ibs.com$AbSxIntensity_po_2*df1.ibs.com$Gender))
+# 0.398
+
+summary(lm(df1.ibs.com$R~df1.ibs.com$AbSxIntensity_po_2*df1.ibs.com$Gender))
+# 0.727114
+
+summary(lm(df1.ibs.com$CCh~df1.ibs.com$AbSxIntensity_po_2*df1.ibs.com$Gender))
+# 0.0225*
+
+summary(lm(df1.ibs.com$FD4~df1.ibs.com$AbSxIntensity_po_2*df1.ibs.com$Gender))
+# 0.952
+
+summary(lm(df1.ibs.com$FD4.slope~df1.ibs.com$AbSxIntensity_po_2*df1.ibs.com$Gender))
+# 0.76795
+
+
+
+### bloating
+
+summary(lm(df1.ibs.com$I~df1.ibs.com$Bloating*df1.ibs.com$Gender))
+# 0.5165
+
+summary(lm(df1.ibs.com$G~df1.ibs.com$Bloating*df1.ibs.com$Gender))
+# 0.3448
+
+summary(lm(df1.ibs.com$R~df1.ibs.com$Bloating*df1.ibs.com$Gender))
+# 0.5742
+
+summary(lm(df1.ibs.com$CCh~df1.ibs.com$Bloating*df1.ibs.com$Gender))
+# 0.7138
+
+summary(lm(df1.ibs.com$FD4~df1.ibs.com$Bloating*df1.ibs.com$Gender))
+# 0.05814
+
+summary(lm(df1.ibs.com$FD4.slope~df1.ibs.com$Bloating*df1.ibs.com$Gender))
+# 0.3568
+
+# Bowel habit
+per.ibs<- subset(per, per$Dx == "IBS")
+summary(lm(per.ibs$I ~ per.ibs$bowel.habits* per.ibs$Gender)) #NS
+summary(aov(per.ibs$I ~ per.ibs$bowel.habits))
+#0.566
+
+summary(lm(per.ibs$G ~ per.ibs$bowel.habits)) #NS
+summary(aov(per.ibs$G ~ per.ibs$bowel.habits))
+# 0.86
+
+summary(lm(per.ibs$R ~ per.ibs$bowel.habits)) #NS
+summary(aov(per.ibs$R ~ per.ibs$bowel.habits))
+# 0.672
+
+summary(lm(per.ibs$CCh ~ per.ibs$bowel.habits* per.ibs$Gender)) 
+# CCH is significantly higher in IBS-C compared to IBS D and HC 0.00398, 0.00341
+summary(aov(per.ibs$CCh ~ per.ibs$bowel.habits))
+# 0.00487
+
+summary(lm(per.ibs$FD4 ~ per.ibs$bowel.habits)) #NS
+summary(aov(per.ibs$FD4 ~ per.ibs$bowel.habits))
+# 0.238
+
+summary(lm(per.ibs$FD4.slope ~ per.ibs$bowel.habits)) #NS
+summary(aov(per.ibs$FD4.slope ~ per.ibs$bowel.habits))
+# 0.355
+
+```
+
+# IBS and Control plots
+
+
+```{r, message=F, warning=F}
+
+setwd("C:/Users/swapnajoshi-admin/Documents/GIT_workspace/InetstinalPermeability/DDW_2016abstract_analysis/")
+
+library(reshape)
+library(ggplot2)
+library(gridExtra)
+library(grid)
+
+# df2 <- melt(df1, id = c("dx","Sex", "bowel.habits","menstrual.cycle"))
+
+p <- ggplot(per, aes(as.factor(Dx),I, fill = per$Dx)) + geom_boxplot() 
+ggsave(p, file= "Dx_I.png")
+
+p <- ggplot(per, aes(as.factor(Dx),G, fill = factor(Dx)))
+p2 <- p + geom_boxplot()
+ggsave(p2, file= "Dx_G.png")
+
+p <- ggplot(per, aes(as.factor(Dx),R, fill = factor(Dx)))
+p3 <- p + geom_boxplot()
+ggsave(p3, file= "Dx_R.png")
+
+p <- ggplot(per, aes(as.factor(Dx),FD4, fill = factor(Dx)))
+p4 <- p + geom_boxplot()
+ggsave(p4, file= "Dx_FD4.png")
+
+p <- ggplot(per, aes(as.factor(Dx),FD4.slope, fill = factor(Dx)))
+p5 <- p + geom_boxplot()
+ggsave(p5, file= "Dx_FD4_slope.png")
+
+p <- ggplot(per, aes(as.factor(Dx),CCh, fill = factor(Dx)))
+p6 <- p + geom_boxplot()
+ggsave(p6, file= "Dx_CCh.png")
+
+# grid.arrange(p1,p2,p3,p4,p5, ncol=1, nrow = 5)
+ggsave(grid.arrange(p1,p2,p3,p4,p5, ncol=2, nrow = 3), file = "IBSpermeability.png", height = 7, width = 10, units = "in")
+
+p1
+p2
+p3
+p4
+p5
+```
+
+# IBS and gender interaction plots
+
+```{r, message=F, warning=F}
+p <- ggplot(per, aes(as.factor(Gender),I, fill = per$Gender)) + geom_boxplot() 
+ggsave(p, file= "Gender_I.png")
+
+p <- ggplot(per, aes(as.factor(Gender),G, fill = per$Gender))
+p2 <- p + geom_boxplot()
+ggsave(p2, file= "Gender_G.png")
+
+p <- ggplot(per, aes(as.factor(Gender),R, fill = factor(Gender)))
+p3 <- p + geom_boxplot()
+ggsave(p3, file= "Gender_R.png")
+
+p <- ggplot(per, aes(as.factor(Gender),FD4, fill = factor(Gender)))
+p4 <- p + geom_boxplot()
+ggsave(p4, file= "Gender_FD4.png")
+
+p <- ggplot(per, aes(as.factor(Gender),FD4.slope, fill = factor(Gender)))
+p5 <- p + geom_boxplot()
+ggsave(p5, file= "Gender_FD4_slope.png")
+
+p <- ggplot(per, aes(as.factor(Gender), CCh, fill = factor(Gender)))
+p6 <- p + geom_boxplot()
+ggsave(p6, file= "Gender_CCh.png")
+
+per$dxGenInt <- interaction(per$Dx,per$Gender)
+p <- ggplot(per, aes(as.factor(dxGenInt),I, fill = factor(dxGenInt)))
+p1 <- p + geom_jitter(width = 0.25, size = 1.5)+ ylim (0,150) + geom_errorbar(yintercept = "mean")
+
+p <- ggplot(per, aes(as.factor(dxGenInt),G, fill = factor(dxGenInt)))
+p2 <- p + geom_jitter(width = 0.25, size = 1.5)+ ylim (0,150)
+
+p <- ggplot(per, aes(as.factor(dxGenInt),R, fill = factor(dxGenInt)))
+p3 <- p + geom_jitter(width = 0.25, size = 1.5) + ylim (0,40)
+
+p <- ggplot(per, aes(as.factor(dxGenInt),FD4, fill = factor(dxGenInt)))
+p4 <- p + geom_jitter(width = 0.25, size = 1.5) + ylim (0,500)
+
+p <- ggplot(per, aes(as.factor(dxGenInt),FD4.slope, fill = factor(dxGenInt)))
+p5 <- p + geom_jitter(width = 0.25, size = 1.5) + ylim (0,1.5)
+
+# grid.arrange(p1,p2,p3,p4,p5, ncol=2, nrow = 3)
+ggsave(grid.arrange(p1,p2,p3,p4,p5, ncol=1, nrow = 5), file = "IBSpermeability_gender_interaction.png",height = 10, width = 8, units = "in")
+p2
+p3
+p4
+p5
+```
+
+# IBS and gender interaction plots with bowel habits jitter
+
+```{r, message=F, warning=F}
+
+per$bowel.habits <- gsub("U","M", per$bowel.habits)
+per$dxGenInt <- interaction(per$Dx,per$Gender)
+per$BH_color <- ifelse(per$bowel.habits == "C", "red", ifelse(per$bowel.habits == "D", "Green",ifelse(per$bowel.habits == "M", "purple", "grey")))
+
+p <- ggplot(per, aes(as.factor(dxGenInt),I))
+p1 <- p + geom_boxplot()+ geom_jitter(size = 3, color = per$BH_color)
+ggsave(p1, file = "dxGenInt_I.png")
+
+p <- ggplot(per, aes(as.factor(dxGenInt),G))
+p2 <- p + geom_boxplot()+ geom_jitter(size = 3, color = per$BH_color)
+ggsave(p2, file = "dxGenInt_G.png")
+
+
+p <- ggplot(per, aes(as.factor(dxGenInt),R))
+p3 <- p + geom_boxplot()+ geom_jitter(size = 3, color = per$BH_color)
+ggsave(p3, file = "dxGenInt_R.png")
+
+p <- ggplot(per, aes(as.factor(dxGenInt),FD4))
+p4 <- p + geom_boxplot()+ geom_jitter(size = 3, color = per$BH_color)
+ggsave(p4, file = "dxGenInt_FD4.png")
+
+p <- ggplot(per, aes(as.factor(dxGenInt),FD4.slope))
+p5 <- p + geom_boxplot()+ geom_jitter(size = 3, color = per$BH_color)
+ggsave(p5, file = "dxGenInt_FD4_slope.png")
+
+p <- ggplot(per, aes(as.factor(dxGenInt),CCh))
+p5 <- p + geom_boxplot()+ geom_jitter(size = 3, color = per$BH_color)
+ggsave(p5, file = "dxGenInt_CCh.png")
+# grid.arrange(p1,p2,p3,p4,p5, ncol=1, nrow = 5)
+ggsave(grid.arrange(p1,p2,p3,p4,p5, ncol=1, nrow = 5), file = "IBSpermeability_Dx_BH_Gender.png",height = 7, width = 10, units = "in")
+p1
+p2
+p3
+p4
+p5
+```
+
+# Bowel habit differences plots
+
+```{r, message=F, warning=F}
+
+p <- ggplot(per.ibs, aes(as.factor(bowel.habits),I, fill =bowel.habits))
+p1 <- p + geom_boxplot()
+ggsave(p1, file= "BH_I.png")
+
+p <- ggplot(per.ibs, aes(as.factor(bowel.habits),G, fill =bowel.habits))
+p2 <- p + geom_boxplot()
+ggsave(p2, file = "BH_G.png")
+
+p <- ggplot(per.ibs, aes(as.factor(bowel.habits),R, fill =bowel.habits))
+p3 <- p + geom_boxplot()
+ggsave(p3, file= "BH_R.png")
+
+p <- ggplot(per.ibs, aes(as.factor(bowel.habits),CCh, fill =bowel.habits))
+p3 <- p + geom_boxplot()
+ggsave(p3, file= "BH_CCh.png")
+
+p <- ggplot(per.ibs, aes(as.factor(bowel.habits),FD4, fill =bowel.habits))
+p4 <- p + geom_boxplot()
+ggsave(p4, file= "BH_FD4.png")
+
+p <- ggplot(per.ibs, aes(as.factor(bowel.habits),FD4.slope, fill =bowel.habits))
+p5 <- p + geom_boxplot()
+ggsave(p5, file = "BH_FD4_slope.png")
+
+
+
+p1
+p2
+p3
+p4
+p5
+# grid.arrange(p1,p2,p3,p4,p5, ncol=1, nrow = 5)
+ggsave(grid.arrange(p1,p2,p3,p4,p5, ncol=2, nrow = 3), file = "IBSpermeability_BH.png",height = 7, width = 10, units = "in")
+```
+
+Interaction with jitter
+
+```{r}
+p <- ggplot(per, aes(as.factor(dxGenInt),I, fill = dxGenInt))
+p1 <- p + geom_boxplot()+ geom_jitter(size = 3)
+ggsave(p1, file = "dxGenInt_I.png")
+
+p <- ggplot(per, aes(as.factor(dxGenInt),G,  fill = dxGenInt))
+p2 <- p + geom_boxplot()+ geom_jitter(size = 3)
+ggsave(p2, file = "dxGenInt_G.png")
+
+
+p <- ggplot(per, aes(as.factor(dxGenInt),R, fill = dxGenInt))
+p3 <- p + geom_boxplot()+ geom_jitter(size = 3)
+ggsave(p3, file = "dxGenInt_R.png")
+
+p <- ggplot(per, aes(as.factor(dxGenInt),FD4,  fill = dxGenInt))
+p4 <- p + geom_boxplot()+ geom_jitter(size = 3)
+ggsave(p4, file = "dxGenInt_FD4.png")
+
+p <- ggplot(per, aes(as.factor(dxGenInt),FD4.slope,  fill = dxGenInt))
+p5 <- p + geom_boxplot()+ geom_jitter(size = 3)
+ggsave(p5, file = "dxGenInt_FD4_slope.png")
+
+p <- ggplot(per, aes(as.factor(dxGenInt),CCh,  fill = dxGenInt))
+p5 <- p + geom_boxplot()+ geom_jitter(size = 3)
+ggsave(p5, file = "dxGenInt_CCh.png")
+
+```
+
+
+
+
+################################################################### unused for DDW
+# dichotomize permeability at the median
+
+```{r}
+# select G/conductance as a measure of permeability
+perMedian <- median(per$G, na.rm = TRUE) 
+perMedian # 67.46633
+
+# divide the samples into two gropus highPerm and lowPerm based on the median
+
+per$highPerm <- ifelse(per$G >= perMedian, 1,0)
+
+fisher.test(table(per$dx,per$highPerm))
+
+save(per, file = "per.rda")
+
+```
+
+```{r}
+library(graphics)
+png("mosaicplotPerm.png")
+mosaicplot (table(per$dx,per$highPerm), color=TRUE) 
+dev.off()
+mosaicplot (table(per$dx,per$highPerm), color=TRUE) 
+```
+
+# fitting logistic regression for trait data with 'G' 
+
+```{r}
+# import phenotype data
+pheno <- read.csv("C:/Users/swapnajoshi-admin/Documents/GIT_workspace/InetstinalPermeability/sjoshi_permeability_071216.csv", sep = ",", row.names = 1)
+row.names(per) <- gsub(" ","",row.names(per))
+pheno1 <- pheno[row.names(pheno)%in%row.names(per), ]
+per1 <- per[row.names(per)%in%row.names(pheno),]
+pheno1 <- pheno1[row.names(per1),]
+match(row.names(pheno1),row.names(per1))
+perPheno <- cbind(pheno1, per1)
+
+perPheno1<- perPheno[perPheno$Group==2,c(4,5,6,8,17, 18,19,20,21,22,23,24,25,26,27,31,33,35,36,37,38,39,40,41,42,43,72,73,74,75,76, 77,80,81,82,83, 84, 85)]
+
+# regression
+
+# calculate p value and plot the lm results
+
+# perPheno1[,3]<- as.numeric(as.character(perPheno1[,3]))
+# perPheno1[,2]<- as.numeric(as.character(perPheno1[,2]))
+pval <- matrix(NA, nrow = 38, ncol=2)
+
+
+for ( i in c(1:38))
+{
+  pval[i,1] = round(anova(lm(perPheno1[,i]~perPheno1[,35]))$'Pr(>F)'[1],3)
+pval[i,2] = round(summary(lm(perPheno1[,i]~perPheno1[,35]))$r.squared,3)
+png(paste(colnames(perPheno1)[i],"_perm_G.png", sep = ""))
+        plot(perPheno1[,i] ~ perPheno1[,35], xlab = "G", ylab = colnames(perPheno1)[i])
+        legend("bottomright",paste(paste("p_value =", pval[i,1], paste("RSquared = ", pval[i,2]))), cex = 0.9)
+        # text(paste(paste("p_value =", pval[i,1], paste("RSquared = ", pval[i,2]))), cex=0.6, pos=1, col="red")
+        dev.off()
+        plot(perPheno1[,i] ~ perPheno1[,35], xlab = "G", ylab = colnames(perPheno1)[i])
+        legend("bottomright",paste(paste("p_value =", pval[i,1], paste("RSquared = ", pval[i,2]))), cex = 0.9)
+        # text(paste(paste("p_value =", pval[i,1], paste("RSquared = ", pval[i,2]))), cex=0.6, pos=1, col="red")
+}
+
+
+row.names(pval) <- colnames(perPheno1)
+colnames(pval) <- c("P_value", "RSquared")
+pval
+
+# AbdominalPain = 0.078
+
+
+subset(pval, pval[,1] < 0.1) 
+
+
+
+# Individual box plots for vectors, interaction and sample size
+
+
+##############
+perPheno2 <- subset(perPheno1, perPheno1$G != 'NA')
+## gender differences
+library(grid)
+summary(lm(perPheno2[,35]~perPheno2[,3]))
+p_value <- round(anova(lm(perPheno2[,35]~perPheno2[,3]))$'Pr(>F)'[1],3)
+p <- ggplot(perPheno2, aes(as.factor(Sex),G, fill = factor(Sex)))
+grob <- grobTree(textGrob(paste("p_value =", p_value), x=0.5,  y=0.95,  gp=gpar(col="red", fontsize=14)))
+p1 <- p + geom_boxplot() + ylim (0,150)+ annotation_custom(grob)
+p1
+
+## IBS differences
+summary(lm(perPheno2[,35]~perPheno2[,1]))
+p_value <- round(anova(lm(perPheno2[,35]~perPheno2[,1]))$'Pr(>F)'[1],3)
+p <- ggplot(perPheno2, aes(as.factor(Group),G, fill = factor(Group)))
+grob <- grobTree(textGrob(paste("p_value =", p_value), x=0.5,  y=0.95,  gp=gpar(col="red", fontsize=14)))
+p1 <- p + geom_boxplot() + ylim (0,150)+ annotation_custom(grob)
+p1
+
+## interaction 
+# Boxplots
+
+p <- ggplot(perPheno2, aes(as.factor(dxGenInt),G))
+p1 <- p + geom_boxplot()+ geom_jitter(size = 3, color = perPheno2$BH_color)+ ylim (0,150)
+p1
+
+summary(lm(perPheno2[,35]~perPheno2[,1]*perPheno2[,3]))
+p_value <- round(anova(lm(perPheno2[,35]~perPheno2[,1]*perPheno2[,3]))$'Pr(>F)'[1],3)
+p <- ggplot(perPheno2, aes(as.factor(dxGenInt),G, fill = factor(dxGenInt)))
+grob <- grobTree(textGrob(paste("p_value =", p_value), x=0.5,  y=0.95,  gp=gpar(col="red", fontsize=14)))
+p1 <- p + geom_boxplot() + ylim (0,150)+ annotation_custom(grob)
+p1
+# which groups are significantly different?
+combinations <- combn(names(table(perPheno2$dxGenInt)),2)
+#      [,1]    [,2]   [,3]    [,4]    [,5]    [,6]   
+# [1,] "HC.F"  "HC.F" "HC.F"  "IBS.F" "IBS.F" "HC.M" 
+# [2,] "IBS.F" "HC.M" "IBS.M" "HC.M"  "IBS.M" "IBS.M"
+
+int.p <- matrix(NA, nrow = 6, ncol =1)
+row.names(int.p) <- paste(combinations[1,], combinations[2,], sep = "_")
+
+int.p[1,1] <- t.test(perPheno2[perPheno2$dxGenInt == "HC.F"| perPheno2$dxGenInt =="IBS.F",38] ~ as.character(perPheno2[perPheno2$dxGenInt == "HC.F"| perPheno2$dxGenInt =="IBS.F",39]) )$p.value
+
+int.p[2,1] <- t.test(perPheno2[perPheno2$dxGenInt == "HC.F"| perPheno2$dxGenInt =="HC.M",38] ~ as.character(perPheno2[perPheno2$dxGenInt == "HC.F"| perPheno2$dxGenInt =="HC.M",39]) )$p.value
+
+int.p[3,1] <- t.test(perPheno2[perPheno2$dxGenInt == "HC.F"| perPheno2$dxGenInt =="IBS.M",38] ~ as.character(perPheno2[perPheno2$dxGenInt == "HC.F"| perPheno2$dxGenInt =="IBS.M",39]) )$p.value
+
+int.p[4,1] <- t.test(perPheno2[perPheno2$dxGenInt == "IBS.F"| perPheno2$dxGenInt =="HC.M",38] ~ as.character(perPheno2[perPheno2$dxGenInt == "IBS.F"| perPheno2$dxGenInt =="HC.M",39]) )$p.value
+
+int.p[5,1] <- t.test(perPheno2[perPheno2$dxGenInt == "IBS.F"| perPheno2$dxGenInt =="IBS.M",38] ~ as.character(perPheno2[perPheno2$dxGenInt == "IBS.F"| perPheno2$dxGenInt =="IBS.M",39]) )$p.value
+
+int.p[6,1] <- t.test(perPheno2[perPheno2$dxGenInt == "HC.M"| perPheno2$dxGenInt =="IBS.M",38] ~ as.character(perPheno2[perPheno2$dxGenInt == "HC.M"| perPheno2$dxGenInt =="IBS.M",39]) )$p.value
+
+
+int.p
+
+# interaction Plots
+#1
+# library(stats)
+# interaction.plot(as.factor(perPheno2$Group),as.factor(perPheno2$Sex),perPheno2$G,xlab="Group",ylab="G",trace.label="Sex", fixed=TRUE)
+
+#2
+# install.packages("Matrix")
+# library(Matrix)
+library(effects)
+perPheno2$Group <- as.factor(perPheno2$Group)
+perPheno2$Sex <- as.factor(perPheno2$Sex)
+model.lm <- lm(formula= G~Group*Sex, data=perPheno2)
+perPheno2$predicted=predict(model.lm)
+plot(effect(term="Group:Sex",mod=model.lm,default.levels=4),multiline=TRUE)
+
+
+#3
+df <- with(perPheno2 , aggregate(G, list(Group=Group, Sex=Sex), mean))
+df$se <- with(perPheno2 , aggregate(G, list(Group=Group, Sex=Sex), function(x) sd(x)/sqrt(10)))[,3]
+
+opar <- theme_update(panel.grid.major = element_blank(),
+                     panel.grid.minor = element_blank(),
+                     panel.background = element_rect(colour = "black"))
+gp <- ggplot(df, aes(x=Group, y=x, colour=Sex, group=Sex))
+gp + geom_line(aes(linetype=Sex), size=.6) + 
+     geom_point(aes(shape=Sex), size=3) + 
+     geom_errorbar(aes(ymax=x+se, ymin=x-se), width=.1)
+theme_set(opar)
+
+
+
+#### SAMPLE Size
+
+
+
+# subset.mean <- function(x,y,z,n) { mean(subset(x, y == "z")$a, na.rm = TRUE)}
+# mean.HCF.G <- subset.mean(perPheno1, perPheno1$dxGenInt, "HC.F", perPheno1$G)
+
+#  HC.F IBS.F  HC.M IBS.M 
+#     5    18     6     7 
+
+mean.sd <- matrix(NA, nrow = 4,ncol = 2)
+row.names(mean.sd) <- names(table(perPheno1$dxGenInt))
+colnames(mean.sd) <- c("Mean", "SD")
+
+mean.sd[1,1] <- mean(subset(perPheno1, perPheno1$dxGenInt == "HC.F")$G, na.rm = TRUE)
+mean.sd[1,2] <- sd(subset(perPheno1, perPheno1$dxGenInt == "HC.F")$G, na.rm = TRUE)
+
+mean.sd[2,1] <- mean(subset(perPheno1, perPheno1$dxGenInt == "IBS.F")$G, na.rm = TRUE)
+mean.sd[2,2] <- sd(subset(perPheno1, perPheno1$dxGenInt == "IBS.F")$G, na.rm = TRUE)
+
+mean.sd[3,1] <- mean(subset(perPheno1, perPheno1$dxGenInt == "HC.M")$G, na.rm = TRUE)
+mean.sd[3,2] <- sd(subset(perPheno1, perPheno1$dxGenInt == "HC.M")$G, na.rm = TRUE)
+
+mean.sd[4,1] <- mean(subset(perPheno1, perPheno1$dxGenInt == "IBS.M")$G, na.rm = TRUE)
+mean.sd[4,2] <- sd(subset(perPheno1, perPheno1$dxGenInt == "IBS.M")$G, na.rm = TRUE)
+
+mean.sd
+#    Mean        SD
+# HC.F  68.45267  9.046390
+# IBS.F 86.06213 25.926123
+# HC.M  44.57064  7.610016
+# IBS.M 71.97551 13.962806
+
+mean.sd.t <- t(mean.sd)
+mean.sd.t 
+
+md1 <- function(x,y,z) {return(x[1,y]-x[1,z])} 
+md1(mean.sd.t,1,2)
+#-17.60
+md1(mean.sd.t,2,3)
+#41.49
+md1(mean.sd.t,3,4)
+#-27
+md1(mean.sd.t,1,4)
+# -3.5
+md1(mean.sd.t,2,4)
+# 14
+md1(mean.sd.t,1,3)
+# 23.88203
+
+## sample size
+# install.packages("samplesize")
+library(samplesize)
+
+n.ttest(power = 0.8, alpha = 0.05, mean.diff = 41.49, sd1 = 25.926123, sd2 = 7, design = "unpaired", variance="unequal")
+# $`Total sample size`
+# [1] 9
+# 
+# $`Sample size group 1`
+# [1] 7
+# 
+# $`sample size group 2`
+# [1] 2
+
+n.ttest(power = 0.8, alpha = 0.05, mean.diff = 3.5, sd1 = 9.04639, sd2 = 13.96281, design = "unpaired", variance="unequal")
+# $`Total sample size`
+# [1] 343
+# 
+# $`Sample size group 1`
+# [1] 135
+# 
+# $`sample size group 2`
+# [1] 208
+
+n.ttest(power = 0.8, alpha = 0.05, mean.diff = 17, sd1 = 9.04639, sd2 = 13.96281, design = "unpaired", variance="unequal")
+
+
+# These are retrospective calculations of sample sizes which may not be appropriate to prove that this study was powered since it is based on the study in question, if we had to design a new study with knowledge of standard deviation of the population and expected mean difference, we would need atleast 18 samples for detecting the largest differnces or 600 for smallest differnces for each comparison.
+
+
+# Since we will be looking at 6 combinations; 18*6 = 108
+
+n.ttest(power = 0.8, alpha = 0.05, mean.diff = 17, sd1 =25, sd2 = 13.96281, design = "unpaired", variance="unequal")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#how many common samples between microbiome and permeability
+
+```{r, echo=FALSE,include=FALSE}
+load("C:/Users/swapnajoshi-admin/Documents/swapna/genus1.rda")
+comSamples <- per[row.names(per)%in%substr(colnames(genus1),8,12),]
+table(comSamples$dx) # HC IBS 4  10
+table(comSamples$bowel.habits) # C D M N 3 3 3 5 
+table(comSamples$dx, comSamples$Sex)
+#       F M
+#   HC  1 3
+#   IBS 8 2
+```
+
+```{r, echo=FALSE,include=FALSE}
+load("C:/Users/swapnajoshi-admin/Documents/swapna/physeq.rda")
+load("C:/Users/swapnajoshi-admin/Documents/GIT_workspace/InetstinalPermeability/per.rda")
+
+```
+
+```{r, echo=FALSE,include=FALSE}
+ex3 <- subset_samples(physeq, substr(Description,8,12)%in%row.names(per))
+ex3
+```
+
+
+```{r, echo=FALSE,include=FALSE}
+comSamples1 <- comSamples[ substr(row.names(sample_data(ex3)),8,12), ]
+sample_data(ex3)$per_G <- comSamples1$highPerm
+
+```
+## Differences in richness between disease groups in the small sample
+```{r, echo=FALSE,include=FALSE}
+sample_variables(ex3)[1:10]
+
+p <- plot_richness(ex3, x = "as.factor(Group)")
+q <- p + geom_boxplot(data = p$data, aes(x = as.factor(Group), y = value, color = NULL), alpha = 0.1)
+ggsave(q, file ="richness_IBSvsHCs.png")
+q
+```
+## Differences in richness between bowel habit subtypes
+```{r, echo=FALSE,include=FALSE}
+p <- plot_richness(ex3, x = "as.factor(BH)")
+q <- p + geom_boxplot(data = p$data, aes(x = as.factor(BH), y = value, color = NULL), alpha = 0.1)
+ggsave(q, file ="richness_bowelhabits.png")
+q
+```
+## Differences in richness between permeability G classes
+```{r, echo=FALSE,include=FALSE}
+p <- plot_richness(ex3, x = "as.factor(per_G)")
+q <- p + geom_boxplot(data = p$data, aes(x = as.factor(per_G), y = value, color = NULL), alpha = 0.1)
+ggsave(q, file ="richness_bowelhabits.png")
+q
+```
+## Differences in richness between sex
+```{r, echo=FALSE,include=FALSE}
+p <- plot_richness(ex3, x = "as.factor(Gender)")
+q <- p + geom_boxplot(data = p$data, aes(x = as.factor(Gender), y = value, color = NULL), alpha = 0.1)
+ggsave(q, file ="richness_Sex.png")
+q
+```
+
+## Differences in richness interaction between IBS and Sex
+```{r, echo=FALSE,include=FALSE}
+p <- plot_richness(ex3, x = "Dx_Gender_interaction")
+q <- p + geom_boxplot(data = p$data, aes(x = as.factor(Dx_Gender_interaction), y = value, color = NULL), alpha = 0.1)
+ggsave(q, file ="richness_interaction_Dx_sex.png")
+q
+```
+
+# Abundance bar plots
+```{r, echo=FALSE,include=FALSE}
+TopNOTUs = names(sort(taxa_sums(ex3), TRUE)[1:20])
+ent10 = prune_taxa(TopNOTUs, ex3)
+png("BarPlot_top10_Group.png", height = 3000, width = 3500, res = 200)
+plot_bar(ent10, "Group", fill = "Genus",facet_grid = ~Genus)
+dev.off()
+plot_bar(ent10, "Group", fill = "Family",facet_grid = ~Family)
+
+```
+
+
+# Abundance bar plots for permeability
+```{r, echo=FALSE,include=FALSE}
+TopNOTUs = names(sort(taxa_sums(ex3), TRUE)[1:20])
+ent10 = prune_taxa(TopNOTUs, ex3)
+png("BarPlot_top10_Group.png", height = 3000, width = 3500, res = 200)
+plot_bar(ent10, "as.factor(per_G)", fill = "Genus",facet_grid = ~Genus)
+dev.off()
+plot_bar(ent10, "as.factor(per_G)", fill = "Family",facet_grid = ~Family)
+
+```
+# For clinical traits table 
+```{r}
+hcPer <- perMap[perMap$Group==1,];dim(hcPer)
+mean(hcPer$HAD_Anxiety)
+
+```
+
+# Calculating the 'Reference range' for 'G' :
+```{r}
+
+# Reference Range = mean+2SD 
+
+```
+# unused edge R from Permeability5262017.Rmd file
+# EdgeR
+
+```{r}
+design           <- model.matrix(~0+colDatPerm$IBS_Sex_int)
+colnames(design) <- c("HC.F","IBS.F","HC.M", "IBS.M") #levels(colDatPerm$IBS_Sex_int)
+```
+
+
+```{r}
+library(edgeR)
+library(org.Hs.eg.db)
+y       <- DGEList(counts = exprColDatPerm, group = colDatPerm$IBS_Sex_int)
+y$Genes <- mapIds(org.Hs.eg.db, keys=rownames(y), keytype="ENSEMBL", column="SYMBOL", multiVals="first")
+y       <- calcNormFactors(y)
+y       <- estimateDisp(y,design, robust=TRUE)
+```
+
+```{r}
+fit  <- glmQLFit(y, design, robust=TRUE)
+F_M  <- makeContrasts(F-M, levels=design)
+res1 <- glmQLFTest(fit, contrast=F_M)
+res2 <- glmQLFTest(fit, contrast=F_M)
+res3 <- glmQLFTest(fit, contrast=F_M)
+res4 <- glmQLFTest(fit, contrast=F_M)
+
+resultsFVsM <- data.frame(topTags(res,n=dim(res$table)[1]))
+resultsFVsM <- data.frame(topTags(res,n=dim(res$table)[1]))
+resultsFVsM <- data.frame(topTags(res,n=dim(res$table)[1]))
+resultsFVsM <- data.frame(topTags(res,n=dim(res$table)[1]))
+
+y$Genes <- y$Genes[row.names(resultsFVsM )]
+resultsFVsM $Gene_Symbol <- y$Genes
+```
+
+## Association with Bowel Habits
+
+```{r}
+### BH
+colDatPermCD <- subset(colDatPerm, colDatPerm$BH_Colon_Exam=="C"|colDatPerm$BH_Colon_Exam=="D"); dim(colDatPermCD)
+# [1] 30  24
+exprColDatPermCD <- exprColDat[,colnames(exprColDat)%in%row.names(colDatPermCD)]; dim(exprColDatPermCD)
+# [1] 60204   30
+all.equal(colnames(exprColDatPermCD),row.names(colDatPermCD))
+colDatPermCD$BH_Colon_Exam <- factor(colDatPermCD$BH_Colon_Exam)
+colDatPermCD$Lane <- factor(colDatPermCD$Lane)
+QBHCDRes <- deseqOut(exprColDatPermCD, colDatPermCD, "BH_Colon_Exam", "Lane", 5, featureData)
+QBHCDResFdr01 <- as.data.frame(subset(QBHCDRes, QBHCDRes$padj<0.1)); dim(QBHCDResFdr01)
+QBHCDResTjp <- QBHCDRes[QBHCDRes$V2%in%tjp,c(28,34,31)]
+###
+colDatPermCN <- subset(colDatPerm, colDatPerm$BH_Colon_Exam=="C"|colDatPerm$BH_Colon_Exam=="N"); dim(colDatPermCN)
+# [1] 30  24
+exprColDatPermCN <- exprColDat[,colnames(exprColDat)%in%row.names(colDatPermCN)]; dim(exprColDatPermCN)
+# [1] 60204   30
+all.equal(colnames(exprColDatPermCN),row.names(colDatPermCN))
+relevel()
+colDatPermCN$BH_Colon_Exam <- factor(colDatPermCN$BH_Colon_Exam)
+colDatPermCN$BH_Colon_Exam <- relevel(colDatPermCN$BH_Colon_Exam,ref="N")
+colDatPermCN$Lane <- as.factor(colDatPermCN$Lane)
+QBHCNRes <- deseqOut(exprColDatPermCN, colDatPermCN, "BH_Colon_Exam", "Lane", 5, featureData)
+QBHCNResFdr01 <- as.data.frame(subset(QBHCNRes, QBHCNRes$padj<0.1)); dim(QBHCNResFdr01)
+QBHCNResTjp <- QBHCNRes[QBHCNRes$V2%in%tjp,c(28,34,31)]
+
+###
+colDatPermDN <- subset(colDatPerm, colDatPerm$BH_Colon_Exam=="D"|colDatPerm$BH_Colon_Exam=="N"); dim(colDatPermDN)
+# [1] 38  24
+exprColDatPermDN <- exprColDat[,colnames(exprColDat)%in%row.names(colDatPermDN)]; dim(exprColDatPermDN)
+# [1] 60204   38
+all.equal(colnames(exprColDatPermDN),row.names(colDatPermDN))
+colDatPermDN$BH_Colon_Exam <- factor(colDatPermDN$BH_Colon_Exam)
+colDatPermDN$BH_Colon_Exam <- relevel(colDatPermDN$BH_Colon_Exam,ref="N")
+colDatPermDN$Lane <- as.factor(colDatPermDN$Lane)
+QBHDNRes <- deseqOut(exprColDatPermDN, colDatPermDN, "BH_Colon_Exam", "Lane", 5, featureData)
+QBHDNResFdr01 <- as.data.frame(subset(QBHDNRes, QBHDNRes$padj<0.1)); dim(QBHDNResFdr01)
+QBHDNResTjp <- QBHDNRes[QBHDNRes$V2%in%tjp,c(28,34,31)]
+
+```

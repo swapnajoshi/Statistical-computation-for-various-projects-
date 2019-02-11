@@ -1,0 +1,966 @@
+---
+title: "Permeability5262017"
+author: "Swapna Mahurkar-Joshi"
+date: "June 20, 2016"
+output:
+pdf_document: default
+word_document: default
+---
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+library(ggplot2)
+library(grid)
+library(knitr)
+library(reshape)
+library(gridExtra)
+library(ggpubr)
+```
+
+# Import permeabilty data
+
+```{r, message=F, warning=F}
+# Permeability data file:
+per <- read.csv("C:/Users/swapnajoshi-admin/Box Sync/IBSinetstinalPermeabilityProject/data/technicallyCorrectData/IBS HC biopsies bilan_081617.csv", sep = ",", row.names = 1,na.strings=c("",".","NA")); dim(per)
+# per$bowel.habits <- gsub("U","M",per$bowel.habits)
+# per$bowel.habits <- gsub("C [(]Rome IV[)], M [(]Rome III[)]","C",per$bowel.habits)
+
+# clinical data file: 
+perMap <- read.csv("C:/Users/swapnajoshi-admin/Box Sync/IBSinetstinalPermeabilityProject/data/technicallyCorrectData/sjoshi_permeability_082517.csv", row.names = 1)
+
+# Remove outliers as indicated in the original excel sheet
+per$I[per$I>= 200| per$I<= 5] <- NA
+per$G[per$G>= 200| per$G<= 5] <- NA
+per$R[per$R>= 200| per$R<= 5] <- NA
+per$ibsGenInt <- interaction(per$Dx, per$Sex)
+# per <- as.data.frame(per)
+# per$menstrual_cat <- per$menstrual.cycle
+# per$menstrual_cat <- gsub("Luteal Phase (irregular cycle)", "Other",per$menstrual_cat)
+# per$menstrual_cat <- gsub("Phase Unknown", "Other",per$menstrual_cat)
+# per$menstrual_cat <- gsub("Menstruating (day 2)", "Other",per$menstrual_cat)
+p <- ggplot(per, aes(as.factor(ibsGenInt),FD4.slope, fill = factor(ibsGenInt)))
+p5 <- p + geom_boxplot() + geom_jitter(width = 0.25, size = 1.5) + ylim (0,1.5)
+colnames(per)[7] <- "FD4" 
+
+save(per, file = "C:/Users/swapnajoshi-admin/Box Sync/IBSinetstinalPermeabilityProject/data/consitstantData/per.rda")
+
+```
+# test if the data are normally distributed
+```{r, out.width="50%", out.extra='style="background-color: #9ecff7; padding:10px; display: inline-block;"', eval=FALSE}
+## Have a look at the densities
+load("C:/Users/swapnajoshi-admin/Box Sync/IBSinetstinalPermeabilityProject/data/consitstantData/per.rda")
+plot(density(per$I, na.rm = TRUE));plot(density(per$G, na.rm = TRUE)); plot(density(per$R, na.rm = TRUE));plot(density(per$CCh, na.rm = TRUE));plot(density(per$FD4, na.rm = TRUE));plot(density(per$FD4.slope, na.rm = TRUE)) 
+
+## Perform the test
+shapiro.test(per$I); shapiro.test(per$G);shapiro.test(per$R);shapiro.test(per$CCh); shapiro.test(per$FD4); shapiro.test(per$FD4.slope)
+
+## Plot using a qqplot
+qqnorm(per$I);qqline(per$I, col = 2)
+qqnorm(per$G);qqline(per$G, col = 2)
+qqnorm(per$R);qqline(per$R, col = 2)
+qqnorm(per$CCh);qqline(per$CCh, col = 2)
+qqnorm(per$FD4);qqline(per$FD4, col = 2)
+qqnorm(per$FD4.slope);qqline(per$FD4.slope, col = 2)
+# There is deviation from normality for all variables except I
+```
+
+
+# Association tests
+```{r, warning = FALSE, message = FALSE}
+# per$dxGenInt <- interaction(per$Dx,per$Sex)
+
+df1 <- per[,-c(1,2,10,11)]
+
+aov_p <- function (modelobject) {
+    p <- modelobject[[1]]$'Pr(>F)'[1]
+    return(p)
+}
+
+t_p <- function (modelobject) {
+     p <- modelobject$p.value
+    return(p)
+}
+
+
+w_p <- function (modelobject) {
+     p <- modelobject$p.value
+    return(p)
+}
+
+k_p <- function (modelobject) {
+     p <- modelobject$p.value
+    return(p)
+}
+
+lm_p <- function (modelobject) {
+    p <- summary(modelobject)[[4]][2,4]
+    return(p)
+}
+
+df1[,c(7:10)] <- lapply(df1[,c(7:10)],as.factor)
+
+comb1 <- expand.grid(names(df1[,c(1:6)]),names(df1[,c(8:9)]))
+
+models <- lapply(paste (comb1[,1],comb1[,2], sep = "~"), formula)
+res.models <- lapply(models, FUN = function(x) {wilcox.test(formula = x, data = df1)})
+# names(res.models) <- paste(comb1[,1],comb1[,2], sep = "~")
+resDf <- round(matrix(t(data.frame(lapply(res.models, FUN = w_p))),nrow=6, ncol=2),3)
+colnames(resDf) <- names(df1[,c(8:9)])
+row.names(resDf) <- names(df1[,c(1:6)])
+kable(resDf, caption = "Association between permeabilty and Dx and permeabilty and sex")
+```
+
+```{r}
+# Controling for HAD anxiety 
+perMap1 <- perMap[row.names(perMap) %in% row.names(df1),]
+perMap1 <- perMap[row.names(df1),]
+df_lm <- df1
+df_lm$HAD_Anxiety <- perMap1$HAD_Anxiety
+
+comb1 <- expand.grid(names(df_lm[,c(1:6)]),names(df_lm[,c(8:9)]))
+models <- lapply(paste (paste(comb1[,1],comb1[,2], sep = "~"),"+ HAD_Anxiety", sep = ""), formula)
+res.models <- lapply(models, FUN = function(x) {lm(formula = x, data = df_lm)})
+# names(res.models) <- paste(comb1[,1],comb1[,2], sep = "~")
+resDf <- round(matrix(t(data.frame(lapply(res.models, FUN = lm_p))),nrow=6, ncol=2),3)
+colnames(resDf) <- names(df1[,c(8:9)])
+row.names(resDf) <- names(df1[,c(1:6)])
+kable(resDf, caption = "Association between permeabilty and Dx and permeabilty and sex controlled for Anxiety")
+
+
+```
+# plots to visualize the associations
+```{r, out.width="50%", out.extra='style="background-color: #9ecff7; padding:10px; display: inline-block;"', eval=FALSE}
+g <- ggplot(df1, aes(x = Dx, y = G, color = Dx)) + geom_boxplot(outlier.colour = NA) + geom_jitter(aes(color = df1$Dx))+ guides(colour=FALSE)+ stat_compare_means()
+r <- ggplot(df1, aes(x = Dx, y = R, color = Dx)) + geom_boxplot(outlier.colour = NA) + geom_jitter(aes(color = df1$Dx))+ guides(colour=FALSE)+ stat_compare_means()
+png("Dx_perm_boxplot.png", res = 325, height = 800, width = 2000)
+grid.draw(cbind(ggplotGrob(r), ggplotGrob(g), size = "last"))
+dev.off() 
+g
+r
+          
+g <- ggplot(df1, aes(x = Sex, y = G, color = Sex)) + geom_boxplot(outlier.colour = NA) + geom_jitter(aes(color = df1$Sex)) + guides(colour=FALSE)+ stat_compare_means()
+r <- ggplot(df1, aes(x = Sex, y = R, color = Sex)) + geom_boxplot(outlier.colour = NA) + geom_jitter(aes(color = df1$Sex)) + guides(colour=FALSE)+ stat_compare_means()
+cc <- ggplot(df1, aes(x = Sex, y = CCh)) + geom_boxplot(outlier.colour = NA) + geom_jitter(aes(color = df1$Dx)) + guides(colour=FALSE)+ stat_compare_means()
+f <- ggplot(df1, aes(x = Sex, y = FD4, color = Sex)) + geom_boxplot(outlier.colour = NA) + geom_jitter(aes(color = df1$Sex)) + guides(colour=FALSE)+ stat_compare_means()
+fs <- ggplot(df1, aes(x = Sex, y = FD4.slope, color = Sex)) + geom_boxplot(outlier.colour = NA) + geom_jitter(aes(color = df1$Sex)) + guides(colour=FALSE)+ stat_compare_means()
+g
+r
+f
+fs
+png("Sex_perm_boxplot.png", res = 300, height = 1600, width = 1600)
+grid.draw(rbind(cbind(ggplotGrob(r), ggplotGrob(g)), cbind(ggplotGrob(f), ggplotGrob(fs))))
+dev.off() 
+```
+# above plots without p value and bigger text
+
+```{r, out.width="50%", out.extra='style="background-color: #9ecff7; padding:10px; display: inline-block;"', eval=FALSE}
+g <- ggplot(df1, aes(x = Dx, y = G, color = Dx)) + geom_boxplot(outlier.colour = NA) + geom_jitter(aes(color = df1$Dx))+ guides(colour=FALSE) + theme(axis.text=element_text(size=12), axis.title=element_text(size=16)) #+ stat_compare_means()
+r <- ggplot(df1, aes(x = Dx, y = R, color = Dx)) + geom_boxplot(outlier.colour = NA) + geom_jitter(aes(color = df1$Dx))+ guides(colour=FALSE) + theme(axis.text=element_text(size=12), axis.title=element_text(size=16)) #+ stat_compare_means()
+                                                                                                                                                      
+png("Dx_perm_boxplot_new.png", res = 325, height = 800, width = 2000)
+grid.draw(cbind(ggplotGrob(r), ggplotGrob(g), size = "last"))
+dev.off() 
+g
+r
+          
+g <- ggplot(df1, aes(x = Sex, y = G, color = Sex)) + geom_boxplot(outlier.colour = NA) + geom_jitter(aes(color = df1$Sex)) + guides(colour=FALSE)  + theme(axis.text=element_text(size=12), axis.title=element_text(size=16))#+ stat_compare_means()
+r <- ggplot(df1, aes(x = Sex, y = R, color = Sex)) + geom_boxplot(outlier.colour = NA) + geom_jitter(aes(color = df1$Sex)) + guides(colour=FALSE)  + theme(axis.text=element_text(size=12), axis.title=element_text(size=16)) #+ stat_compare_means()
+cc <- ggplot(df1, aes(x = Sex, y = CCh)) + geom_boxplot(outlier.colour = NA) + geom_jitter(aes(color = df1$Dx)) + guides(colour=FALSE)  + theme(axis.text=element_text(size=12), axis.title=element_text(size=16))#+ stat_compare_means()
+f <- ggplot(df1, aes(x = Sex, y = FD4, color = Sex)) + geom_boxplot(outlier.colour = NA) + geom_jitter(aes(color = df1$Sex)) + guides(colour=FALSE)  + theme(axis.text=element_text(size=12), axis.title=element_text(size=16)) #+ stat_compare_means()
+fs <- ggplot(df1, aes(x = Sex, y = FD4.slope, color = Sex)) + geom_boxplot(outlier.colour = NA) + geom_jitter(aes(color = df1$Sex)) + guides(colour=FALSE)  + theme(axis.text=element_text(size=12), axis.title=element_text(size=16)) #+ stat_compare_means()
+g
+r
+f
+fs
+png("Sex_perm_boxplot_newHalf1.png", res = 300, height = 800, width = 2000)
+grid.draw(cbind(ggplotGrob(r), ggplotGrob(g), size = "last"))
+dev.off() 
+
+png("Sex_perm_boxplot_newHalf2.png", res = 300, height = 800, width = 2000)
+grid.draw(cbind(ggplotGrob(f), ggplotGrob(fs), size = "last"))
+dev.off() 
+```
+
+Non parametric tests were perfomed to assess differences in permeability measures between IBS-HC and Men-women. G,R, were significantly diff between IBS-HC, all except I and CCh were significantly different between Men and women.
+```{r}
+# , names(df1[,-c(7,8,9,10,11)]),
+# Dx interaction with sex
+f <- summary(lm(G ~ Sex*Dx, data = df1))$fstatistic
+pf(f[1], f[2], f[3], lower=FALSE) # 0.002681
+summary(lm(G ~ Sex*Dx, data = df1)) # No significant interaction
+
+# Call:
+# lm(formula = G ~ Sex * Dx, data = df1)
+# 
+# Residuals:
+#     Min      1Q  Median      3Q     Max 
+# -39.903 -14.698  -4.547  10.730  88.973 
+# 
+# Coefficients:
+#             Estimate Std. Error t value Pr(>|t|)    
+# (Intercept)   67.146      8.001   8.392 1.54e-11 ***
+# SexM         -24.367     11.315  -2.153   0.0355 *  
+# DxIBS         12.126      9.197   1.318   0.1926    
+# SexM:DxIBS    13.119     13.675   0.959   0.3415    
+# ---
+# Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+# 
+# Residual standard error: 24 on 57 degrees of freedom
+#   (2 observations deleted due to missingness)
+# Multiple R-squared:  0.2185,	Adjusted R-squared:  0.1773 
+# F-statistic: 5.312 on 3 and 57 DF,  p-value: 0.002681
+
+resDf <- as.data.frame(resDf)
+resDf$interactionEffect <- c(round(summary(lm(I ~ Sex*Dx, data = df1))[[4]][4,4],2), round(summary(lm(G ~ Sex*Dx, data = df1))[[4]][4,4],2), round(summary(lm(R ~ Sex*Dx, data = df1))[[4]][4,4],2), round(summary(lm(CCh ~ Sex*Dx, data = df1))[[4]][4,4],2),round(summary(lm(FD4 ~ Sex*Dx, data = df1))[[4]][4,4],2), round(summary(lm(FD4.slope ~ Sex*Dx, data = df1))[[4]][4,4],2))
+
+# Dx controlled for sex
+f <- summary(lm(G ~ Sex+Dx, data = df1))$fstatistic
+pf(f[1], f[2], f[3], lower=FALSE) # 0.00125 
+summary(lm(G ~ Sex+Dx, data = df1)) # main effects are significant.
+# Call:
+# lm(formula = G ~ Sex + Dx, data = df1)
+# 
+# Residuals:
+#     Min      1Q  Median      3Q     Max 
+# -41.346 -14.401  -0.413   9.648  91.667 
+# 
+# Coefficients:
+#             Estimate Std. Error t value Pr(>|t|)    
+# (Intercept)   62.656      6.484   9.663 1.09e-13 ***
+# SexM         -15.386      6.350  -2.423   0.0185 *  
+# DxIBS         18.060      6.802   2.655   0.0102 *  
+# ---
+# Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+# 
+# Residual standard error: 23.99 on 58 degrees of freedom
+#   (2 observations deleted due to missingness)
+# Multiple R-squared:  0.2059,	Adjusted R-squared:  0.1785 
+# F-statistic: 7.518 on 2 and 58 DF,  p-value: 0.00125
+
+lmp <- function (modelobject) {
+    # if (class(modelobject) != "lm") stop("Not an object of class 'lm' ")
+    f <- modelobject$fstatistic
+    p <- pf(f[1],f[2],f[3],lower.tail=F)
+    attributes(p) <- NULL
+    return(p)
+}
+
+models <- lapply(paste(names(df1[,-c(7,8,9,10,11)]),"Dx + Sex", sep = "~"), formula)
+res.models <- lapply(models, FUN = function(x) {summary(lm(formula = x, data = df1[,-c(7,10,11)]))})
+names(res.models) <- paste("Dx + Sex", names(df1)[-c(7,8,9,10,11)], sep = "~")
+resDf <- as.data.frame(resDf)
+resDf$DxControlledforSex <- round(t(data.frame(lapply(res.models, FUN = lmp))),3)[,1]
+
+kable(resDf, caption = "Association of Dx, gender, bowel habit with intestinal permeability")
+```
+# Plot IBS-HC interactions
+```{r}
+g <- ggplot(df1, aes(x = ibsGenInt, y = G, color = ibsGenInt)) + geom_boxplot(outlier.colour = NA) + geom_jitter(aes(color = df1$ibsGenInt)) + guides(colour=FALSE) +  theme(axis.title.x=element_blank())
+r <- ggplot(df1, aes(x = ibsGenInt, y = R, color = ibsGenInt)) + geom_boxplot(outlier.colour = NA) + geom_jitter(aes(color = df1$ibsGenInt)) + guides(colour=FALSE)+ theme(axis.title.x=element_blank())
+f <- ggplot(df1, aes(x = ibsGenInt, y = FD4, color = ibsGenInt)) + geom_boxplot(outlier.colour = NA) + geom_jitter(aes(color = df1$ibsGenInt)) + guides(colour=FALSE)+ theme(axis.title.x=element_blank())
+fs <- ggplot(df1, aes(x = ibsGenInt, y = FD4.slope, color = ibsGenInt)) + geom_boxplot(outlier.colour = NA) + geom_jitter(aes(color = df1$ibsGenInt)) + guides(colour=FALSE) + theme(axis.title.x=element_blank())
+g
+r
+f
+fs
+png("dxSexInt_perm_boxplot.png", res = 350, height = 2000, width = 2000)
+grid.draw(rbind(cbind(ggplotGrob(r), ggplotGrob(g)), cbind(ggplotGrob(f), ggplotGrob(fs))))
+dev.off()
+```
+
+```{r}
+# within Women and within men
+df1.f <- subset(df1, df1$Sex == "F")
+df1.m <- subset(df1, df1$Sex == "M")
+#women
+f <- summary(lm(G ~ Dx, data = df1.f))$fstatistic
+pf(f[1], f[2], f[3], lower=FALSE) # 0.199
+summary(lm(G ~ Dx, data = df1.f))
+#men
+f <- summary(lm(G ~ Dx, data = df1.m))$fstatistic
+pf(f[1], f[2], f[3], lower=FALSE) # 0.019
+summary(lm(G ~ Dx, data = df1.m))
+# p values for G women, men: 0.199, 0.019
+# p values for R women, men: 0.726, 0.0018
+# p values for FD4 women, men: 0.188, 0.48
+# p values for FD4.slope women, men: 0.211, 0.21
+
+# with in IBS and within HCs
+df1.ibs <- subset(df1, df1$Dx == "IBS")
+df1.hc <- subset(df1, df1$Dx == "HC")
+#women
+f <- summary(lm(FD4.slope ~ Sex, data = df1.ibs))$fstatistic
+pf(f[1], f[2], f[3], lower=FALSE) # 0.199
+summary(lm(FD4.slope ~ Sex, data = df1.ibs))
+#men
+f <- summary(lm(FD4.slope ~ Sex, data = df1.hc))$fstatistic
+pf(f[1], f[2], f[3], lower=FALSE) # 0.019
+summary(lm(FD4.slope ~ Sex, data = df1.hc))
+```
+
+
+
+
+
+
+# Summary statistics - median and IQR ####mean and standard deviation
+```{r, warning = FALSE, message = FALSE}
+per1<- df1[,-10]
+mdata <- melt(per1, id=c("bowel.habits..Rome.III.","Dx","Sex","ibsGenInt")) 
+DxMedians <- cast(mdata, Dx~variable, median, na.rm = TRUE)
+DxMedians[,2:7] <- round(DxMedians[,2:7],2)
+DxIqr <- cast(mdata, Dx~variable, IQR, na.rm = TRUE)
+DxIqr[,2:7] <- round(DxIqr[,2:7],2)
+dfStats <-  matrix(NA, nrow=2, ncol = 7)
+row.names(dfStats) <- DxMedians[,1]
+colnames(dfStats) <- colnames(DxMedians)
+for ( i in 1:2){
+  for (j in 2:7) { 
+    dfStats[i,j] <- paste(DxMedians[i,j],"(",DxIqr[i,j],")", sep = "")
+    }
+}
+kable(t(dfStats), caption = "summary statistics_Dx")
+
+SexMedians <- cast(mdata, Sex~variable, median, na.rm = TRUE)
+SexMedians[,2:7] <- round(SexMedians[,2:7],2)
+SexIqr <- cast(mdata, Sex~variable, IQR, na.rm = TRUE)
+SexIqr[,2:7] <- round(SexIqr[,2:7],2)
+dfStats1 <-  matrix(NA, nrow=2, ncol = 7)
+row.names(dfStats1) <- SexMedians[,1]
+colnames(dfStats1) <- colnames(SexMedians)
+for ( i in 1:2){
+  for (j in 2:7) { 
+    dfStats1[i,j] <- paste(SexMedians[i,j],"(",SexIqr[i,j],")", sep = "")
+    }
+}
+
+kable(t(dfStats1), caption = "summary statistics_Gender")
+```
+# bowel habit differences
+```{r}
+# f <- summary(lm(G ~ bowel.habits..Rome.III., data = df1))$fstatistic
+# pf(f[1], f[2], f[3], lower=FALSE) #0.02313
+df1$bowel.habits..Rome.III. <- factor(df1$bowel.habits..Rome.III.)
+summary(lm(G ~ bowel.habits..Rome.III., data = df1))
+levels(df1$bowel.habits..Rome.III.) <- c("C", "D", "M", "HC", "U")
+df1$bowel.habits..Rome.III. <- relevel(df1$bowel.habits..Rome.III.,ref ="HC")
+summary(lm(G ~ bowel.habits..Rome.III., data = df1))
+# Call:
+# lm(formula = G ~ bowel.habits..Rome.III., data = df1)
+# 
+# Residuals:
+#     Min      1Q  Median      3Q     Max 
+# -48.238 -17.554  -2.171  12.664  73.062 
+# 
+# Coefficients:
+#                          Estimate Std. Error t value Pr(>|t|)    
+# (Intercept)                54.963      5.843   9.406    4e-13 ***
+# bowel.habits..Rome.III.C   19.869      9.777   2.032  0.04689 *  
+# bowel.habits..Rome.III.D   28.972      8.518   3.401  0.00124 ** 
+# bowel.habits..Rome.III.M   14.586      9.487   1.537  0.12984    
+# bowel.habits..Rome.III.U    8.983     11.686   0.769  0.44532    
+# ---
+# Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+# 
+# Residual standard error: 24.79 on 56 degrees of freedom
+#   (2 observations deleted due to missingness)
+# Multiple R-squared:  0.181,	Adjusted R-squared:  0.1225 
+# F-statistic: 3.094 on 4 and 56 DF,  p-value: 0.02265
+
+# IBS only
+df1.ibs <- subset(df1, df1$Dx == "IBS")
+df1.ibs$bowel.habits..Rome.III. <- factor(df1.ibs$bowel.habits..Rome.III.)
+summary(lm(G ~ bowel.habits..Rome.III., data = df1.ibs))
+
+```
+
+```{r}
+# Non-parametric tests for multiple groups: 
+## bowel habit differences 
+models <- lapply(paste(names(df1[,-c(7,8,9,10,11)]),"bowel.habits..Rome.III.", sep = "~"), formula)
+res.models <- lapply(models, FUN = function(x) {kruskal.test(formula = x, data = df1[,-c(8,9,10,11)])})
+names(res.models) <- paste("bowel.habits..Rome.III.", names(df1)[-c(7,8,9,10,11)], sep = "~")
+resDf <- as.data.frame(resDf)
+resDf$BowelHabitsandNcomp <- round(t(data.frame(lapply(res.models, FUN = k_p))),3)[,1]
+
+## bowel habit differences could be driven by N vs C and D, therefore check within patients
+df1.ibs <- subset(df1, df1$Dx == "IBS")
+df1.ibs$bowel.habits..Rome.III. <- factor(df1.ibs$bowel.habits..Rome.III.)
+models <- lapply(paste(names(df1.ibs[,-c(7,8,9,10,11)]),"bowel.habits..Rome.III.", sep = "~"), formula)
+res.models <- lapply(models, FUN = function(x) {kruskal.test(formula = x, data = df1.ibs[,-c(8,9,10,11)])})
+names(res.models) <- paste("bowel.habits..Rome.III.", names(df1.ibs)[-c(7,8,9,10,11)], sep = "~")
+resDf <- as.data.frame(resDf)
+resDf$BH_within_IBS <- round(t(data.frame(lapply(res.models, FUN = k_p))),3)[,1]
+kable(resDf, caption = "Association of Dx, gender, bowel habit with intestinal permeability") 
+```
+Summary statistics for bowel habits
+```{r}
+BHMedians <- cast(mdata, bowel.habits..Rome.III.~variable, median, na.rm = TRUE)
+BHMedians[,2:7] <- round(BHMedians[,2:7],2)
+BHIqr <- cast(mdata, bowel.habits..Rome.III.~variable, IQR, na.rm = TRUE)
+BHIqr[,2:7] <- round(BHIqr[,2:7],2)
+dfStats1 <-  matrix(NA, nrow=5, ncol = 7)
+row.names(dfStats1) <- BHMedians[,1]
+colnames(dfStats1) <- colnames(BHMedians)
+for ( i in 1:5){
+  for (j in 2:7) { 
+    dfStats1[i,j] <- paste(BHMedians[i,j],"(",BHIqr[i,j],")", sep = "")
+    }
+}
+
+kable(t(dfStats1), caption = "summary statistics_BH")
+
+```
+
+
+```{r, message=F, warning=F, echo = FALSE}
+# # Visualization of Dx, bowel habit and Sex assocaitions with permeability
+
+# comb1 <- expand.grid(names(per[,c(3:8)]),"Dx")
+# plot_list = list()
+# for (i in 1:6) {
+#     p = ggplot(per, aes_string(x=comb1[i,2], y=comb1[i,1])) +
+#         geom_boxplot(outlier.colour = NA) + geom_jitter(color = "blue")+ labs(x= comb1[i,2],y = comb1[i,1]) + annotate("text", x=1.5, y=max(per$comb1[i,1], na.rm = TRUE)+max(per$comb1[i,1], na.rm = TRUE)/10, label= paste("Asso. p", round(resDf[i,2],3), sep = "="))
+#     plot_list[[i]] = p
+# }
+# 
+# grid.arrange(grobs = plot_list[[]], ncol= 2)
+# 
+# colnames(df4)[1] <- "Dx"
+# plot_list = list()
+# for (i in 2:7) { 
+# p = ggplot(df4, aes(df4[,1],df4[,i])) + geom_boxplot(outlier.colour = NA) + geom_jitter(color = "blue")+ labs(x= "Dx",y=colnames(df4)[i]) + annotate("text", x=1.5, y=max(df4[,i], na.rm = TRUE)+max(df4[,i], na.rm = TRUE)/10, label= paste("Asso. p", round(resDf[i,2],3), sep = "="))
+#   plot_list[[i]] = p
+# }
+# 
+# grid.arrange(grobs = plot_list[[]], ncol= 2)
+
+```
+
+# Visualization of association of IBS bowel habits with permeability
+```{r,warning = FALSE, message = FALSE, echo = FALSE}
+g <- ggplot(df1, aes(x = bowel.habits..Rome.III., y = G, fill = bowel.habits..Rome.III.)) + geom_boxplot(outlier.colour = NA) + geom_jitter(aes(color = df1$Sex)) + guides(colour=FALSE) #+  theme(axis.title.x=element_blank())+ stat_compare_means()
+r <- ggplot(df1, aes(x = bowel.habits..Rome.III., y = R,  fill =  bowel.habits..Rome.III.)) + geom_boxplot(outlier.colour = NA) + geom_jitter(aes(color = df1$Sex)) + guides(colour=FALSE) #+ theme(axis.title.x=element_blank())+ stat_compare_means()
+f <- ggplot(df1, aes(x = bowel.habits..Rome.III., y = FD4,  fill =  bowel.habits..Rome.III.)) + geom_boxplot(outlier.colour = NA) + geom_jitter(aes(color = df1$Sex)) + guides(colour=FALSE ) #+ theme(axis.title.x=element_blank())+ stat_compare_means()
+fs <- ggplot(df1, aes(x = bowel.habits..Rome.III., y = FD4.slope,  fill = bowel.habits..Rome.III.)) + geom_boxplot(outlier.colour = NA) + geom_jitter(aes(color = df1$Sex)) + guides(colour=FALSE) #+ theme(axis.title.x=element_blank())+ stat_compare_means()
+g
+r
+f
+fs
+png("BH_perm_boxplot_jitter_sex.png", res = 325, height = 2000, width = 2200)
+grid.draw(rbind(cbind(ggplotGrob(r), ggplotGrob(g)), cbind(ggplotGrob(f), ggplotGrob(fs))))
+dev.off() 
+
+```
+
+# Visualization of association of IBS and gender interaction subgroups with permeability colored by Menstrual phase
+```{r "IBS_Sex interaction plot colored by menstrual cycle", warning=FALSE, message=FALSE, echo=FALSE}
+df1.f <- subset(df1, df1$Sex=="F")
+g <- ggplot(df1.f, aes(x = Dx, y = G)) + geom_boxplot(outlier.colour = NA) + geom_jitter(aes(color = df1.f$menstrual_cat))
+r <- ggplot(df1.f, aes(x = Dx, y = R)) + geom_boxplot(outlier.colour = NA) + geom_jitter(aes(color = df1.f$menstrual_cat))
+png("menstrual_cat_Dx_perm_boxplot.png", res = 335, height = 800, width = 3000)
+grid.draw(cbind(ggplotGrob(g), ggplotGrob(r), size = "last"))
+dev.off() 
+g
+r
+## interaction between menstrual category and IBS in women
+# df1.f.comp <- subset(df1.f, df1.f$menstrual_cat!=NA)
+summary(lm(I ~ Dx*menstrual_cat, data = df1.f))
+resDf <- as.data.frame(resDf)
+resDf$mensIntEffect <- c(round(summary(lm(I ~ Dx*menstrual_cat, data = df1.f))[[4]][5,4],2), round(summary(lm(G ~ Dx*menstrual_cat, data = df1.f))[[4]][5,4],2), round(summary(lm(R ~ Dx*menstrual_cat, data = df1.f))[[4]][5,4],2), round(summary(lm(CCh ~ Dx*menstrual_cat, data = df1.f))[[4]][5,4],2),round(summary(lm(FD4 ~ Dx*menstrual_cat, data = df1.f))[[4]][5,4],2), round(summary(lm(FD4.slope ~ Dx*menstrual_cat, data = df1.f))[[4]][5,4],2))
+
+kable(resDf, caption = "Association of Dx, gender, bowel habit with intestinal permeability")
+```
+# Association of clinical symptoms with permeability
+```{r, warning = FALSE, message = FALSE, echo=FALSE}
+perMap.ibs <- subset(perMap, perMap$Group == 2)
+perMap.ibs <- perMap.ibs[row.names(df1.ibs),]
+match(row.names(df1.ibs),row.names(perMap.ibs))
+df2 <- cbind(perMap.ibs, df1.ibs)
+df3 <- df2[,c(7:20,22,24:27,29:34,36,37,38,39,40,51:57)]
+lmp <- function (modelobject) {
+    # if (class(modelobject) != "lm") stop("Not an object of class 'lm' ")
+    f <- modelobject$fstatistic
+    p <- pf(f[1],f[2],f[3],lower.tail=F)
+    attributes(p) <- NULL
+    return(p)
+}
+
+comb1 <- expand.grid(names(df3[,c(32:37)]),names(df3[,c(1:31)]))
+
+models <- lapply(paste(comb1[,1],comb1[,2], sep = "~"), formula)
+res.models <- lapply(models, FUN = function(x) {summary(lm(formula = x, data = df3))})
+# names(res.models) <- paste(comb1[,1],comb1[,2], sep = "~")
+resDf <- round(matrix(t(data.frame(lapply(res.models, FUN = lmp))),nrow=31, ncol=6, byrow = TRUE),3)
+colnames(resDf) <- names(df3[,c(32:37)])
+row.names(resDf) <- names(df3[,c(1:31)])
+
+library(Hmisc)
+cor1 <- rcorr(as.matrix(df3), type="spearman")
+rSq <- cor1$r[1:31,32:37]
+pVal <- round(cor1$P[1:31,32:37],3)
+write.csv(pVal , file= "C:/Users/swapnajoshi-admin/Documents/GIT_workspace/IBS_PO1/RawData/pValClinMetCorr.csv")
+write.csv(rSq , file= "C:/Users/swapnajoshi-admin/Documents/GIT_workspace/IBS_PO1/RawData/rSquaredClinMetCorr.csv")
+
+```
+
+# Association of Clinical Features with Permeability
+```{r}
+kable(pVal, align=c(rep('c', 32)), caption = "Correlation p values of Clinical Features with Conductance parameters")
+
+```
+
+## There was a significant assocaition of visceral clinical features with cch
+
+# Correlation plots to visualize the accociation of clinical features with permeability.
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+
+x = df3$CCh
+y = df3[,c(1:31)]
+df4 = data.frame(x=x,y=y)
+
+for (i in 1:31) { 
+ggsave(ggplot(df4, aes(x,y[,i])) + geom_point() + geom_smooth(method='lm') +  labs(x= "CCh",y=colnames(y)[i]) + annotate("text", x=300, y=1, label= paste("Asso. p", round(resDf[i,4],3), sep = "=")), file = paste("cch",colnames(y)[i], ".png",sep="_") )
+}
+
+for (i in 1:31) { 
+print(ggplot(df4, aes(x,y[,i])) + geom_point() + geom_smooth(method='lm') +  labs(x= "CCh",y=colnames(y)[i]) + annotate("text", x=300, y=1, label= paste("Asso. p", round(resDf[i,4],3), sep = "=")) )
+}
+
+ggsave(ggplot(df3, aes(R,HAD_Anxiety)) + geom_point(size = 2) + geom_smooth(method='lm') +  labs(x= "R",y= "HAD_Anxiety") + annotate("text", x=25, y=1, label= paste("Spearman p", round(pVal[14,3],3), sep = "=")), file = paste("R", "HAD_Anxiety", ".png",sep="_"), dpi =300, height = 6, width = 6, units = "in" )
+
+ggsave(ggplot(df3, aes(G,PHQ_Score_noIBSQs)) + geom_point(size = 2) + geom_smooth(method='lm') +  labs(x= "G",y= "PHQ_Score_noIBSQs") + annotate("text", x=140, y=1, label= paste("Spearman p", round(pVal[23,3],3), sep = "=")), file = paste("G", "PHQ_Score_noIBSQs", ".png",sep="_"), dpi =300, height = 6, width = 6, units = "in" )
+
+ggsave(ggplot(df3, aes(G,PHQ_Score_noGIQs)) + geom_point(size = 2) + geom_smooth(method='lm') +  labs(x= "G",y= "PHQ_Score_noGIQs") + annotate("text", x=140, y=1, label= paste("Spearman p", round(pVal[24,3],3), sep = "=")), file = paste("G", "PHQ_Score_noGIQs", ".png",sep="_"), dpi =300, height = 6, width = 6, units = "in" )
+
+```
+
+# Table 1: Demographics of patients compared to controls
+```{r}
+perMap.hc <- subset(perMap, perMap$Group==1)
+table1 <- matrix(NA, nrow = 15, ncol = 3)
+
+table1[c(1,2,4:15),1] <- round(apply(perMap.ibs[,c(7,10,11,12,19,20,22,24,25, 33, 34,36,37,51)],2,mean, na.rm = TRUE),2)
+table1[c(1,2,4:15),2] <- round(apply(perMap.hc[,c(7,10,11,12,19,20,22,24,25, 33, 34,36,37,51)],2,mean, na.rm = TRUE),2)
+table1[3,1] <- round(table(perMap.ibs$Sex)[2]/(table(perMap.ibs$Sex)[2]+table(perMap.ibs$Sex)[1])*100,2)
+table1[3,2] <-round(table(perMap.hc$Sex)[2]/(table(perMap.hc$Sex)[2]+table(perMap.hc$Sex)[1])*100,2)
+
+row.names(table1)[c(1,2,4:15)] <- colnames(perMap.hc[,c(7,10,11,12,19,20,22,24,25, 33, 34,36,37,51)])
+row.names(table1)[3]<-"Female %"
+
+perMap$Group <- as.factor(perMap$Group)
+comb1 <- expand.grid(names(perMap[,c(7,11,19,20,22,24,25, 33,36,37,51)]),"Group")
+
+models <- lapply(paste(comb1[,1],comb1[,2], sep = "~"), formula)
+res.models <- lapply(models, FUN = function(x) {t.test(formula = x, data = perMap)})
+# names(res.models) <- paste(comb1[,1],comb1[,2], sep = "~")
+table1[c(1,4,6:11,13:15),3] <- round(t(data.frame(lapply(res.models, FUN = t_p))),4)
+colnames(table1) <- c("IBS (N=44)","Healthy Controls (N=19)", "t.test p-value")
+table2 <- matrix(as.numeric(as.character(table1)), nrow = 15, ncol = 3)
+row.names(table2) <- row.names(table1)
+colnames(table2) <- colnames(table1)
+table2[c(2,4,5,12),c(2,3)] <- "-"
+kable(table2,align=c(rep('c', 15)), caption = "Table1: Clinical Characteristics of IBS Patients and HCs")
+
+# Fisher test for sex and bowel habits
+
+fisher.test(perMap$Group, perMap$Sex)
+# fisher.test(perMap$Group, perMap$BH)
+
+ibsCper <- c(round(table(perMap.ibs$BH)[1]/dim(perMap.ibs)[1]*100,2),round(table(perMap.ibs$BH)[2]/dim(perMap.ibs)[1]*100,2),round(table(perMap.ibs$BH)[3]/dim(perMap.ibs)[1]*100,2),round(table(perMap.ibs$BH)[4]/dim(perMap.ibs)[1]*100,2))
+
+```
+
+Identify patients that are outside the reference range: 
+
+Check if "G" is normally distributed;, if yes, reference range is the range that contains 95% of the data. For normally distributed data, 95% data falls within 2 SDs (1.96 to be exact). Therefore, to identify patients with high conductance, calculate mean+2SD, subset patients with G > mean + 2SD 
+
+
+```{r, warning = FALSE, message = FALSE}
+
+# data(QuantSeqSJ)
+# library(QuantSeqSJ)
+# Permeability related samples only
+## TJP genes
+source('~/GIT_workspace/QuantSeq_RNAseq/src/QuantSeqSJ/R/quantSeq_functions1.R', encoding = 'UTF-8')
+#load("C:/Users/swapnajoshi-admin/Documents/GIT_workspace/QuantSeq_RNAseq/temp/featureData.rda")
+load("C:/Users/swapnajoshi-admin/Documents/GIT_workspace/QuantSeq_RNAseq/Data/consistantData/colonTissueRNASeqData.Rda")
+load("C:/Users/swapnajoshi-admin/Box Sync/IBSinetstinalPermeabilityProject/data/consitstantData/per.rda"); dim(per)
+row.names(per) <- gsub(" ","",row.names(per))
+load("C:/Users/swapnajoshi-admin/Documents/GIT_workspace/QuantSeq_RNAseq/Data/consistantData/an.rda")
+
+library(DESeq2)
+tjp <- c("TJP1","TJP3","TJP2","F11R","CLDN1","CLDN2","OCLN","CHRM1","CHRM2","CHRM3", "CGN" , "CGNL1", "MYLK", "PLEKHA7", "TPSAB1", "TPSAB2", "CMA1", "CPA3", "JAM2", "JAM3", "CLDN3", "CLDN4", "CLDN5", "CLDN7", "CLDN8", "CLDN12", "CLDN15", "CLDN17", "CLDN18", "CLDN20", "CLDN22", "CLDN23", "CLDN24")
+
+```
+
+## all genes all subjects TJPs
+```{r}
+all.equal(row.names(colDat),colnames(exprColDat))
+colDat$Group <- as.factor(colDat$Group)
+colDat$Lane<- as.factor(colDat$Lane)
+QDxRes1 <- deseqOut(exprColDat, colDat, "Group", "Lane", an)
+QDxRes1Fdr01 <- as.data.frame(subset(QDxRes, QDxRes$padj<0.1)); dim(QDxResFdr01)
+QDxRes1 <- data.frame(QDxRes1)
+QDxRes1Tjp <- data.frame(QDxRes1[QDxRes1$GeneSymbol%in%tjp,c(1,2,5,7)])
+QDxRes1Tjp
+```
+# Permeability samples only
+
+## DX
+```{r}
+load("C:/Users/swapnajoshi-admin/Documents/GIT_workspace/QuantSeq_RNAseq/Data/consistantData/an.rda")
+exprColDatPerm <- exprColDat[,colnames(exprColDat)%in%row.names(per)]; dim(exprColDatPerm)
+# [1] 60204   63
+
+colDatPerm <- colDat[row.names(colDat)%in%colnames(exprColDatPerm),]; dim(colDatPerm)
+# [1] 63  24
+
+all.equal(row.names(colDatPerm),colnames(exprColDatPerm))
+
+colDatPerm$Group <- as.factor(colDatPerm$Group)
+colDatPerm$Lane<- as.factor(colDatPerm$Lane)
+```
+
+# DESeq
+
+```{r}
+an.tjp <- subset(an, an$hgnc_symbol %in% tjp)
+row.names(an.tjp) <- an.tjp[,1]
+an.tjp <- an.tjp[row.names(exprColDatPermTjp),]
+all.equal(row.names(exprColDatPermTjp), row.names(an.tjp))
+
+exprColDatPermTjp <- exprColDatPerm[row.names(exprColDatPerm)%in%row.names(an.tjp),]
+QDxRes <- deseqOut(exprColDatPermTjp, colDatPerm, "Group", "Lane", an.tjp)
+QDxResFdr01 <- as.data.frame(subset(QDxRes, QDxRes$padj<0.1)); dim(QDxResFdr01)
+QDxResTjp <- data.frame(QDxRes[,c(1,2,5,6,7)])
+QDxResTjp
+
+# Controling for sexSexIqrcolDatPerm$Group <- as.factor(colDatPerm$Group)
+colDatPerm$Sex <- as.factor(colDatPerm$Sex)
+colDatPerm$Lane<- as.factor(colDatPerm$Lane)
+QDxRes <- deseqOut(exprColDatPermTjp, colDatPerm, "Group", "Sex", an)
+QDxResFdr01 <- as.data.frame(subset(QDxRes, QDxRes$padj<0.1)); dim(QDxResFdr01)
+QDxResTjp <- data.frame(QDxRes[,c(1,2,5,6,7)])
+QDxResTjp
+save(QDxResTjp, QDxRes, file = "C:/Users/swapnajoshi-admin/Documents/GIT_workspace/IBSinetstinalPermeabilityProject/GE_tjp_Dx_diff_cont_Sex.Rda")
+```
+Association with Dx controling for sex and batch
+```{r}
+dds <- DESeqDataSetFromMatrix (countData = exprColDatPermTjp, colData = colDatPerm, design = ~ Group + Sex + Lane)
+dds <- DESeq(dds)
+dds <- dds[rownames(dds)%in%row.names(an.tjp),]
+res <- data.frame(results(dds, contrast=c("Group",2,1)))
+res$GeneSymbol <- an.tjp$hgnc_symbol 
+
+```
+
+# Association with Sex
+
+```{r}
+colDatPerm$Sex <- as.factor(colDatPerm$Sex)
+colDatPerm$Lane<- as.factor(colDatPerm$Lane)
+QSexRes <- deseqOut(exprColDatPermTjp, colDatPerm, "Sex", "Lane", an)
+QSexResFdr01 <- as.data.frame(subset(QSexRes, QSexRes$padj<0.1)); dim(QSexResFdr01)
+QSexResTjp <- data.frame(QSexRes[QSexRes$GeneSymbol%in%tjp,c(1,2,5,6,7)])
+QSexResTjp
+save(QSexRes, QSexResTjp, file = "C:/Users/swapnajoshi-admin/Documents/GIT_workspace/IBSinetstinalPermeabilityProject/GE_tjp_Sex_diff.Rda")
+
+
+
+```
+
+
+## IBS -Sex interactions
+
+```{r}
+### within women
+colDatPermF <- subset(colDatPerm, colDatPerm$Sex==2); dim(colDatPermF)
+# [1] 37  24
+exprColDatPermF <- exprColDatPermTjp[,colnames(exprColDatPermTjp)%in%row.names(colDatPermF)]; dim(exprColDatPermF)
+# [1] 22   39
+all(colnames(exprColDatPermF)%in%row.names(colDatPermF))
+
+colDatPermF$Group <- factor(colDatPermF$Group)
+colDatPermF$Lane<- factor(colDatPermF$Lane)
+
+QFDxRes <- deseqOut(exprColDatPermF, colDatPermF, "Group", "Lane",  an)
+QFDxResFdr01 <- as.data.frame(subset(QFDxRes, QFDxRes$padj<0.1)); dim(QFDxResFdr01)
+QFDxResTjp <- data.frame(QFDxRes)
+
+### within men
+colDatPermM <- subset(colDatPerm, colDatPerm$Sex==1); dim(colDatPermM)
+# [1] 24  24
+exprColDatPermM <- exprColDatPermTjp[,colnames(exprColDatPermTjp)%in%row.names(colDatPermM)]; dim(exprColDatPermM)
+# [1] 22   24
+all(colnames(exprColDatPermM)%in%row.names(colDatPermM))
+colDatPermM$Group <- as.factor(colDatPermM$Group)
+colDatPermM$Lane <- as.factor(colDatPermM$Lane)
+QMDxRes <- deseqOut(exprColDatPermM, colDatPermM, "Group", "Lane",  an)
+QMDxResFdr01 <- as.data.frame(subset(QMDxRes, QMDxRes$padj<0.1)); dim(QMDxResFdr01)
+QMDxResTjp <- data.frame(QFDxRes)
+
+
+# Bowel habit
+
+dim(exprColDatPermTjp)
+# [1] 22   63
+all(colnames(exprColDatPermTjp)%in%row.names(colDatPerm))
+
+colDatPerm$BH_Colon_Exam <- factor(colDatPerm$BH_Colon_Exam)
+colDatPerm$Lane<- factor(colDatPerm$Lane)
+
+dds <- DESeqDataSetFromMatrix (countData = exprColDatPermTjp, colData = colDatPerm, design = ~ BH_Colon_Exam + Lane)
+dds <- DESeq(dds)
+dds <- dds[rownames(dds)%in%row.names(an.tjp),]
+
+# C-D
+res <- data.frame(results(dds, contrast=c("BH_Colon_Exam","C","D")))
+res$GeneSymbol <- an.tjp$hgnc_symbol 
+
+QbhResFdr01 <- as.data.frame(subset(res, res$padj<0.1)); dim(QbhResFdr01)
+QbhResTjp <- data.frame(res)
+
+# C-M
+res <- data.frame(results(dds, contrast=c("BH_Colon_Exam","C","M")))
+res$GeneSymbol <- an.tjp$hgnc_symbol 
+
+QbhResFdr01 <- as.data.frame(subset(res, res$padj<0.1)); dim(QbhResFdr01)
+QbhResTjp <- data.frame(res)
+
+# D-M
+res <- data.frame(results(dds, contrast=c("BH_Colon_Exam","D","M")))
+res$GeneSymbol <- an.tjp$hgnc_symbol 
+
+QbhResFdr01 <- as.data.frame(subset(res, res$padj<0.1)); dim(QbhResFdr01)
+QbhResTjp <- data.frame(res)
+
+# C-N
+res <- data.frame(results(dds, contrast=c("BH_Colon_Exam","C","N")))
+res$GeneSymbol <- an.tjp$hgnc_symbol 
+
+QMDxResFdr01 <- as.data.frame(subset(res, res$padj<0.1)); dim(QMDxResFdr01)
+QMDxResTjp <- data.frame(res)
+
+# D-N
+res <- data.frame(results(dds, contrast=c("BH_Colon_Exam","D","N")))
+res$GeneSymbol <- an.tjp$hgnc_symbol 
+
+QMDxResFdr01 <- as.data.frame(subset(res, res$padj<0.1)); dim(QMDxResFdr01)
+QMDxResTjp <- data.frame(res)
+
+
+# M-N
+res <- data.frame(results(dds, contrast=c("BH_Colon_Exam","M","N")))
+res$GeneSymbol <- an.tjp$hgnc_symbol 
+
+QMDxResFdr01 <- as.data.frame(subset(res, res$padj<0.1)); dim(QMDxResFdr01)
+QMDxResTjp <- data.frame(res)
+
+### within women
+colDatPermF <- subset(colDatPerm, colDatPerm$Sex==2); dim(colDatPermF)
+# [1] 39  24
+exprColDatPermF <- exprColDatPermTjp[,colnames(exprColDatPermTjp)%in%row.names(colDatPermF)]; dim(exprColDatPermF)
+# [1] 22   39
+all(colnames(exprColDatPermF)%in%row.names(colDatPermF))
+
+colDatPermF$BH_Colon_Exam <- factor(colDatPermF$BH_Colon_Exam)
+colDatPermF$Lane<- factor(colDatPermF$Lane)
+
+dds <- DESeqDataSetFromMatrix (countData = exprColDatPermF, colData = colDatPermF, design = ~ BH_Colon_Exam + Lane)
+dds <- DESeq(dds)
+dds <- dds[rownames(dds)%in%row.names(an.tjp),]
+
+
+# C-D
+res <- data.frame(results(dds, contrast=c("BH_Colon_Exam","C","D")))
+res$GeneSymbol <- an.tjp$hgnc_symbol 
+
+QFDxResFdr01 <- as.data.frame(subset(res, res$padj<0.1)); dim(QFDxResFdr01)
+QFDxResTjp <- data.frame(res)
+
+# C-M
+res <- data.frame(results(dds, contrast=c("BH_Colon_Exam","C","M")))
+res$GeneSymbol <- an.tjp$hgnc_symbol 
+
+QFDxResFdr01 <- as.data.frame(subset(res, res$padj<0.1)); dim(QFDxResFdr01)
+QFDxResTjp <- data.frame(res)
+
+# D-M
+res <- data.frame(results(dds, contrast=c("BH_Colon_Exam","D","M")))
+res$GeneSymbol <- an.tjp$hgnc_symbol 
+
+QFDxResFdr01 <- as.data.frame(subset(res, res$padj<0.1)); dim(QFDxResFdr01)
+QFDxResTjp <- data.frame(res)
+
+# C-N
+res <- data.frame(results(dds, contrast=c("BH_Colon_Exam","C","N")))
+res$GeneSymbol <- an.tjp$hgnc_symbol 
+
+QMDxResFdr01 <- as.data.frame(subset(res, res$padj<0.1)); dim(QMDxResFdr01)
+QMDxResTjp <- data.frame(res)
+
+# D-N
+res <- data.frame(results(dds, contrast=c("BH_Colon_Exam","D","N")))
+res$GeneSymbol <- an.tjp$hgnc_symbol 
+
+QMDxResFdr01 <- as.data.frame(subset(res, res$padj<0.1)); dim(QMDxResFdr01)
+QMDxResTjp <- data.frame(res)
+
+
+# M-N
+res <- data.frame(results(dds, contrast=c("BH_Colon_Exam","M","N")))
+res$GeneSymbol <- an.tjp$hgnc_symbol 
+
+QMDxResFdr01 <- as.data.frame(subset(res, res$padj<0.1)); dim(QMDxResFdr01)
+QMDxResTjp <- data.frame(res)
+
+### within men
+colDatPermM <- subset(colDatPerm, colDatPerm$Sex==1); dim(colDatPermM)
+# [1] 24  24
+exprColDatPermM <- exprColDatPermTjp[,colnames(exprColDatPermTjp)%in%row.names(colDatPermM)]; dim(exprColDatPermM)
+# [1] 22   24
+all(colnames(exprColDatPermM)%in%row.names(colDatPermM))
+
+colDatPermM$BH_Colon_Exam <- factor(colDatPermM$BH_Colon_Exam)
+colDatPermM$Lane<- factor(colDatPermM$Lane)
+
+dds <- DESeqDataSetFromMatrix (countData = exprColDatPermM, colData = colDatPermM, design = ~ BH_Colon_Exam + Lane)
+dds <- DESeq(dds)
+dds <- dds[rownames(dds)%in%row.names(an.tjp),]
+
+# C-D
+res <- data.frame(results(dds, contrast=c("BH_Colon_Exam","C","D")))
+res$GeneSymbol <- an.tjp$hgnc_symbol 
+
+QMDxResFdr01 <- as.data.frame(subset(res, res$padj<0.1)); dim(QMDxResFdr01)
+QMDxResTjp <- data.frame(res)
+
+# C-M
+res <- data.frame(results(dds, contrast=c("BH_Colon_Exam","C","M")))
+res$GeneSymbol <- an.tjp$hgnc_symbol 
+
+QMDxResFdr01 <- as.data.frame(subset(res, res$padj<0.1)); dim(QMDxResFdr01)
+QMDxResTjp <- data.frame(res)
+
+# D-M
+res <- data.frame(results(dds, contrast=c("BH_Colon_Exam","D","M")))
+res$GeneSymbol <- an.tjp$hgnc_symbol 
+
+QMDxResFdr01 <- as.data.frame(subset(res, res$padj<0.1)); dim(QMDxResFdr01)
+QMDxResTjp <- data.frame(res)
+
+# C-N
+res <- data.frame(results(dds, contrast=c("BH_Colon_Exam","C","N")))
+res$GeneSymbol <- an.tjp$hgnc_symbol 
+
+QMDxResFdr01 <- as.data.frame(subset(res, res$padj<0.1)); dim(QMDxResFdr01)
+QMDxResTjp <- data.frame(res)
+
+# D-N
+res <- data.frame(results(dds, contrast=c("BH_Colon_Exam","D","N")))
+res$GeneSymbol <- an.tjp$hgnc_symbol 
+
+QMDxResFdr01 <- as.data.frame(subset(res, res$padj<0.1)); dim(QMDxResFdr01)
+QMDxResTjp <- data.frame(res)
+
+
+# M-N
+res <- data.frame(results(dds, contrast=c("BH_Colon_Exam","M","N")))
+res$GeneSymbol <- an.tjp$hgnc_symbol 
+
+QMDxResFdr01 <- as.data.frame(subset(res, res$padj<0.1)); dim(QMDxResFdr01)
+QMDxResTjp <- data.frame(res)
+```
+
+
+```{r}
+colDatPerm$Dx     <- gsub(1,"HC",  colDatPerm$Group)
+colDatPerm$Dx     <- gsub(2,"IBS", colDatPerm$Dx)
+colDatPerm$Gender <- gsub(1, "M",  colDatPerm$Sex)
+colDatPerm$Gender <- gsub(2, "F",  colDatPerm$Gender)
+colDatPerm$IBS_Sex_int <- interaction(colDatPerm$Dx, colDatPerm$Gender)
+
+```
+
+## correlation between permeability measures and gene expression
+
+```{r}
+exprColDatPermTjp <- exprColDatPerm[row.names(exprColDatPerm)%in%featureData[featureData$V2 %in% tjp,][,1],]; dim(exprColDatPermTjp)
+
+exprColDatPermTjp <- exprColDatPermTjp[featureData[featureData$V2 %in% tjp,][,1],]
+row.names(exprColDatPermTjp) <- featureData[featureData$V2 %in% tjp,][,2]
+per <- per[colnames(exprColDatPermTjp),]
+all.equal(row.names(per),colnames(exprColDatPermTjp))
+
+df_ge <- cbind(t(exprColDatPermTjp), per)
+df_ge1 <- df_ge[,c(1:22,24:32,34:37)]
+all.equal(row.names(df_ge1), row.names(colDatPerm))
+df_ge1$Lane <- colDatPerm$Lane
+save(df_ge1,exprColDatPerm, colDatPerm,tjp,file = "C:/Users/swapnajoshi-admin/Box Sync/IBSinetstinalPermeabilityProject/data/consitstantData/per_tjp_dat.Rda")
+
+library(Hmisc)
+df_ge1 <- na.omit(df_ge1)
+cor1 <- rcorr(as.matrix(df_ge1[,1:16]), type="spearman")
+cor1 $P[1:10,11:16]
+cor1$r  [1:10,11:16]
+
+df_ge_ibs <- subset(df_ge1, df_ge1$Dx=="IBS")
+cor1 <- rcorr(as.matrix(df_ge_ibs[,1:16]), type="spearman")
+cor1 $P[1:10,11:16]
+cor1$r[1:10,11:16]
+
+df_ge_hcs <- subset(df_ge1, df_ge1$Dx=="HC")
+cor1 <- rcorr(as.matrix(df_ge_hcs[,1:16]), type="spearman")
+cor1 $P[1:10,11:16]
+cor1$r[1:10,11:16]
+
+df_ge_f <- subset(df_ge1, df_ge1$Sex=="F")
+cor1 <- rcorr(as.matrix(df_ge_f[,1:16]), type="spearman")
+cor1 $P[1:10,11:16]
+cor1$r[1:10,11:16]
+
+df_ge_m <- subset(df_ge1, df_ge1$Sex=="M")
+cor1 <- rcorr(as.matrix(df_ge_m[,1:16]), type="spearman")
+cor1 $P[1:10,11:16]
+cor1$r[1:10,11:16]
+
+df_ge_ibs_women <- subset(df_ge_ibs, df_ge_ibs$Sex=="F")
+cor1 <- rcorr(as.matrix(df_ge_ibs_women[,1:16]), type="spearman")
+cor1 $P[1:10,11:16]
+cor1$r[1:10,11:16]
+
+df_ge_ibs_men <- subset(df_ge_ibs, df_ge_ibs$Sex=="M")
+cor1 <- rcorr(as.matrix(df_ge_ibs_men[,1:16]), type="spearman")
+cor1 $P[1:10,11:16]
+cor1$r[1:10,11:16]
+
+```
+
+# Correlation Plots
+
+```{r}
+ggplot(df_ge_m,aes(df_ge_m$TJP1,df_ge_m$FD4.slope))+geom_point()+geom_smooth(method=lm)+xlab("TJP1 Expression")+ ylab("FD4 Slope")+ ggtitle("Correlation between permeability and TJP1 gene within men")+ labs(caption = "Spearman p = 0.02")
+ggplot(df_ge_f,aes(df_ge_f$TJP1,df_ge_f$FD4.slope))+geom_point()+geom_smooth(method=lm)+xlab("TJP1 Expression")+ ylab("FD4 Slope")+ ggtitle("Correlation between permeability and TJP1 gene within women")+ labs(caption = "Spearman p= 0.97")
+```
+
+# Box plots
+
+```{r}
+ggplot(df_ge1,aes(as.factor(df_ge1$bowel.habits..Rome.III.),df_ge1$CHRM3), outlier.color = NA)+ geom_boxplot(outlier.shape=NA)+ stat_summary(fun.y=mean)+ geom_jitter(aes(color = df_ge1$Sex))+ylab("CHRM3 Expression")+ xlab("Bowel Habits")+ ggtitle("CHRM3 expression in IBS bowel habit subtypes")+ labs(caption = "p (C-N) = 0.003")
+
+ggplot(df_ge1,aes(as.factor(df_ge1$Dx),df_ge1$CHRM3), outlier.color = NA)+ geom_boxplot(outlier.shape=NA)+ stat_summary(fun.y=mean)+ geom_jitter(aes(color = df_ge1$Sex))+ylab("CHRM3 Expression")+ xlab("Group")+ ggtitle("CHRM3 expression between IBS and healthy controls")+ labs(caption = "p = 0.04")
+ df_ge1$ibsSexInt <- interaction(df_ge1$Dx, df_ge1$Sex)
+ggplot(df_ge1,aes(as.factor(df_ge1$ibsSexInt ),df_ge1$CHRM3), outlier.color = NA)+ geom_boxplot(outlier.shape=NA)+ stat_summary(fun.y=mean)+ geom_jitter(aes(color = df_ge1$Sex))+ylab("CHRM3 Expression")+ xlab("Group")+ ggtitle("CHRM3 expression between IBS and Sex interaction") # + labs(caption = "p = 0.04")
+
+```
+
+
+
+```{r}
+ggplot(df_ge1,aes(as.factor(df_ge1$bowel.habits..Rome.III.),df_ge1$CHRM3), outlier.color = NA)+ geom_boxplot(outlier.shape=NA)+ stat_summary(fun.y=mean)+ geom_jitter(aes(color = df_ge1$Sex))+ylab("CHRM3 Expression")+ xlab("Bowel Habits")+ ggtitle("CHRM3 expression in IBS bowel habit subtypes")+ labs(caption = "p (C-N) = 0.003")
+
+ggplot(df_ge1,aes(as.factor(df_ge1$Dx),df_ge1$CHRM3), outlier.color = NA)+ geom_boxplot(outlier.shape=NA)+ stat_summary(fun.y=mean)+ geom_jitter(aes(color = df_ge1$Sex))+ylab("CHRM3 Expression")+ xlab("Group")+ ggtitle("CHRM3 expression between IBS and healthy controls")+ labs(caption = "p = 0.04")
+ df_ge1$ibsSexInt <- interaction(df_ge1$Dx, df_ge1$Sex)
+ggplot(df_ge1,aes(as.factor(df_ge1$ibsSexInt ),df_ge1$CHRM3), outlier.color = NA)+ geom_boxplot(outlier.shape=NA)+ stat_summary(fun.y=mean)+ geom_jitter(aes(color = df_ge1$Sex))+ylab("CHRM3 Expression")+ xlab("Group")+ ggtitle("CHRM3 expression between IBS and Sex interaction") # + labs(caption = "p = 0.04")
+```
+

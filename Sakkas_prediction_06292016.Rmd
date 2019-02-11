@@ -1,0 +1,306 @@
+---
+title: "Sakkas_prediction_06292016_V1"
+author: "Swapna Mahurkar-Joshi"
+date: "June 29, 2016"
+output: html_document
+---
+```{r}
+# TODO: Add comment
+# 
+# Author: SwapnaJoshi
+###############################################################################
+## build the model
+
+# source("http://bioconductor.org/biocLite.R")
+# biocLite("glmnet")
+require('lars')
+require('impute')
+require('glmnet')
+library(NanoStringNorm)
+library(limma)
+```
+
+```{r}
+setwd("C:/Users/swapnajoshi/Documents/UCLA_research/analysis_services/Iliopoulos_center_analyses/Sakkas_Iliopoulos/")
+rccfiles<-read.markup.RCC(rcc.pattern="*.RCC|*.rcc",  exclude=NULL, include = NULL, nprobes=-1)
+MirDf<-rccfiles$x
+colnames(MirDf)<-gsub(" ", "_",colnames(MirDf))
+MirDf1<-MirDf[-13,]
+
+nano.norm<-NanoStringNorm(MirDf1,anno = NA,header = NA,
+		Probe.Correction.Factor ='none',CodeCount ='none',
+		Background = 'mean',SampleContent =	'top.geo.mean',	OtherNorm =	'none',
+		round.values = FALSE,
+		is.log = FALSE,
+		take.log = TRUE,
+		return.matrix.of.endogenous.probes = FALSE,
+		traits = NA,
+		predict.conc = TRUE,
+		verbose = TRUE,
+		genes.to.fit,
+		genes.to.predict,
+		guess.cartridge = TRUE
+)
+
+norm.data<-nano.norm$normalized.data
+norm.data1<-subset(norm.data, norm.data$Code.Class!="Negative" & norm.data$Code.Class!="Housekeeping" & norm.data$Code.Class!="Positive" & norm.data$Code.Class!="Ligation"& norm.data$Code.Class!="SpikeIn")
+
+norm.data2<-norm.data1[,4:27]
+colnames(norm.data2)<-substr(colnames(norm.data2),2,100) ## remove the x infront of the colnames; and keep the rest
+
+raw.data<-nano.norm$raw.data
+raw.data1<-raw.data[,4:27]
+```
+
+
+```{r}
+
+png('NanoStringNorm_QC_Plots_stool_ibd_topgeo.png', units ='in',  height = 6,   width = 6, res = 250, pointsize = 10);
+Plot.NanoStringNorm( x = nano.norm,
+		label.best.guess = TRUE,
+		plot.type = c('cv','mean.sd','RNA.estimates','volcano','missing','norm.factors','positive.controls','batch.effects'))
+dev.off()
+
+
+mean2.sam<-apply(raw.data1,2,mean)
+png("boxplot_mirna_ibd_raw.png", height=1000, width=1000, res=200)
+boxplot(raw.data1,horizontal=FALSE,axes=TRUE,cex=0.2,outline=FALSE,xlab="x-axis label", ylab="y-axis label",las=1)
+axis(1,cex.axis=0.5)
+axis(2,cex.axis=0.5) 
+dev.off()
+
+mean2.sam<-apply(norm.data2,2,mean)
+
+png("boxplot_mirna_ibd_norm.png", height=1000, width=1000, res=200)
+boxplot(norm.data2,horizontal=FALSE,axes=TRUE,cex=0.2,outline=FALSE,xlab="x-axis label", ylab="y-axis label",las=1)
+axis(1,cex.axis=0.5)
+axis(2,cex.axis=0.5) 
+dev.off()
+
+```
+
+```{r}
+count.dat<-matrix(NA, nrow=dim(norm.data2)[1],ncol=dim(norm.data2)[2])
+
+for (i in 1:dim(norm.data2)[1])
+	for (j in 1: dim(norm.data2)[2])
+	{
+		if (norm.data2[i,j]>=4.321928)#> log(20,2) [1] 4.64
+		
+		{ count.dat[i,j]<-1}
+		
+		else if (norm.data2[i,j]<4.321928)
+		{ count.dat[i,j]<-0}
+	}
+
+row.names(count.dat)<-row.names(norm.data2)
+colnames(count.dat)<-colnames(norm.data2)
+
+count.dat<-as.data.frame(count.dat)
+
+count.dat$sum1<-apply(count.dat,1,sum)
+
+##### 25% of the probes must pass the threshold of 25 counts or more -- 25% of 24 =6 samples
+probesInt<-subset(count.dat, count.dat$sum1>=6)
+norm.data4<-norm.data2[row.names(norm.data2)%in%row.names(probesInt),]
+
+dim(norm.data4)
+```
+
+```{r}
+save(norm.data4, file="norm.data4.rda")
+```
+
+```{r}
+norm.data4.t<-t(norm.data4)
+norm.data4.t<-as.data.frame(norm.data4.t)
+phenoDat<-read.delim("phenoDat1.csv", sep=",")
+row.names(phenoDat)<-phenoDat[,1]
+match(row.names(phenoDat),row.names(norm.data4.t))
+#  [1]  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24
+
+
+norm.data4.t$Disease<-phenoDat$Group
+
+#parametric or non parametric? generate a q-q plot
+meanDat<-phenoDat
+meanDat$mean1<-mean2.sam
+library(ggplot2)
+qqplot.data <- function (vec) # argument: vector of numbers
+{
+	# following four lines from base R's qqline()
+	y <- quantile(vec[!is.na(vec)], c(0.25, 0.75))
+	x <- qnorm(c(0.25, 0.75))
+	slope <- diff(y)/diff(x)
+	int <- y[1L] - slope * x[1L]
+	
+	d <- data.frame(resids = vec)
+	
+	ggplot(d, aes(sample = resids)) + stat_qq() + geom_abline(slope = slope, intercept = int)
+	
+}
+qqplot1<-qqplot.data(meanDat$mean1)
+ggsave(qqplot1, file="qqplot.IBD.png") ## the plot shows clearly that the data are not normal
+#use non-parametric methods
+
+```
+# Import test data set
+```{r}
+setwd("C:/Users/swapnajoshi/Documents/UCLA_research/analysis_services/Iliopoulos_center_analyses/Sakkas_Iliopoulos/phase_2_6282016/")
+rccfiles<-read.markup.RCC(rcc.pattern="*.RCC|*.rcc",  exclude=NULL, include = NULL, nprobes=-1)
+MirDf<-rccfiles$x
+colnames(MirDf)<-gsub(" ", "_",colnames(MirDf))
+
+boxplot(MirDf[13:20,4:dim(MirDf)[2]]) # negative control box plot looks good 
+boxplot(MirDf[7:12,4:dim(MirDf)[2]]) # positive looks good as well
+
+nano.norm<-NanoStringNorm(MirDf,anno = NA,header = NA,
+		Probe.Correction.Factor ='none',CodeCount ='none',
+		Background = 'mean',SampleContent =	'top.geo.mean',	OtherNorm =	'none',
+		round.values = FALSE,
+		is.log = FALSE,
+		take.log = TRUE,
+		return.matrix.of.endogenous.probes = FALSE,
+		traits = NA,
+		predict.conc = TRUE,
+		verbose = TRUE,
+		genes.to.fit,
+		genes.to.predict,
+		guess.cartridge = TRUE
+)
+
+norm.data<-nano.norm$normalized.data
+norm.data1<-subset(norm.data, norm.data$Code.Class!="Negative" & norm.data$Code.Class!="Housekeeping" & norm.data$Code.Class!="Positive" & norm.data$Code.Class!="Ligation"& norm.data$Code.Class!="SpikeIn")
+
+norm.data2<-norm.data1[,4:27]
+colnames(norm.data2)<-substr(colnames(norm.data2),2,100) ## remove the x infront of the colnames; and keep the rest
+
+raw.data<-nano.norm$raw.data
+raw.data1<-raw.data[,4:27]
+```
+
+
+```{r}
+
+png('NanoStringNorm_QC_Plots_stool_ibd_topgeo_batch2.png', units ='in',  height = 6,   width = 6, res = 250, pointsize = 10);
+Plot.NanoStringNorm( x = nano.norm,
+		label.best.guess = TRUE,
+		plot.type = c('cv','mean.sd','RNA.estimates','volcano','missing','norm.factors','positive.controls','batch.effects'))
+dev.off()
+
+
+mean2.sam<-apply(raw.data1,2,mean)
+png("boxplot_mirna_ibd_raw_batch2.png", height=1000, width=1000, res=200)
+boxplot(raw.data1,horizontal=FALSE,axes=TRUE,cex=0.2,outline=FALSE,xlab="x-axis label", ylab="y-axis label",las=1)
+axis(1,cex.axis=0.5)
+axis(2,cex.axis=0.5) 
+dev.off()
+
+mean2.sam<-apply(norm.data2,2,mean)
+
+png("boxplot_mirna_ibd_norm_batch2.png", height=1000, width=1000, res=200)
+boxplot(norm.data2,horizontal=FALSE,axes=TRUE,cex=0.2,outline=FALSE,xlab="x-axis label", ylab="y-axis label",las=1)
+axis(1,cex.axis=0.5)
+axis(2,cex.axis=0.5) 
+dev.off()
+
+```
+
+```{r}
+count.dat<-matrix(NA, nrow=dim(norm.data2)[1],ncol=dim(norm.data2)[2])
+
+for (i in 1:dim(norm.data2)[1])
+	for (j in 1: dim(norm.data2)[2])
+	{
+		if (norm.data2[i,j]>=4.321928)#> log(20,2) [1] 4.64
+		
+		{ count.dat[i,j]<-1}
+		
+		else if (norm.data2[i,j]<4.321928)
+		{ count.dat[i,j]<-0}
+	}
+
+row.names(count.dat)<-row.names(norm.data2)
+colnames(count.dat)<-colnames(norm.data2)
+
+count.dat<-as.data.frame(count.dat)
+
+count.dat$sum1<-apply(count.dat,1,sum)
+
+##### 25% of the probes must pass the threshold of 25 counts or more -- 25% of 24 =6 samples
+probesInt<-subset(count.dat, count.dat$sum1>=6)
+norm.data4<-norm.data2[row.names(norm.data2)%in%row.names(probesInt),]
+
+dim(norm.data4)
+save(norm.data4, "norm.data4.phase2.rda")
+```
+
+# Training data
+
+```{r}
+## set the seed to make your partition reproductible
+set.seed(123)
+
+phenoDat <- read.delim("phenoDat1.csv", sep=",")
+row.names(phenoDat)<-phenoDat[,1]
+phenoDat <- phenoDat[colnames(norm.data4),]
+match(row.names(phenoDat),colnames(norm.data4))
+
+
+train1<- apply(norm.data4,1,scale)
+train2<-impute.knn(as.matrix(train1))$data
+row.names(train2) <- colnames(norm.data4)
+colnames(train2) <- row.names(norm.data4) # rows should be samples
+
+
+###############################################
+```
+
+```{r}
+test1<- apply(norm.data4,1,scale)
+test2<-impute.knn(as.matrix(test1))$data
+row.names(test2) <- colnames(norm.data4)
+colnames(test2) <- row.names(norm.data4) # rows should be samples
+```
+
+# Since the number of probes called expressed were slightly different from previous (86) vs second run (64), same probes can be used in the test data set
+```{r}
+train3 <- train2[,colnames(train2)%in%colnames(test2)]
+test3 <- test2[,colnames(test2)%in%colnames(train3)]
+test3 <- test3[,colnames(train3)]
+```
+
+
+```{r}
+trainY <- phenoDat[,9]
+# trainY <- makeContrasts(trainVendometrios_Baseline - trainVControl_Baseline, trainVPCOS_Baseline - trainVControl_Baseline,  trainVendometrios - trainVControl,  trainVPCOS - trainVControl, levels = trainMM)
+
+fit1 <- lars(train3, trainY, type = "lasso",trace=TRUE)
+coef(fit1)
+plot(fit1, lwd=2, lty="solid")
+
+fit.cv <- cv.lars(train3, trainY, type="lasso", plot.it = TRUE, use.Gram=FALSE)
+index <- which.min(fit.cv$cv.error)
+s <- fit.cv$index[index]
+
+
+testY <- predict.lars(fit1, test3, s=s, mode="lambda", type="fit")
+
+## and here is how much the model has simplified (down from ~30,000 probes): 
+testCoefs <- predict.lars(fit1, test3, s=s, mode="lambda", type="coef")
+sum(testCoefs$coefficients!=0)
+
+```
+
+
+```{r}
+## now, to quantify how good or bad the predictive model was:
+sort(testY$fit)
+phenoDat
+
+
+```
+
+```
+
+

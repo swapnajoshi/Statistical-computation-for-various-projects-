@@ -1,0 +1,197 @@
+---
+title: "IBD_VSI_1"
+author: "Swapna Mahurkar-Joshi"
+date: "March 6, 2018"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ggplot2)
+library(reshape)
+datpath <- "C:/Users/swapnajoshi-admin/Documents/GIT_workspace/otherPIprojects/Kim_VSI_IBD/"
+outpath <- "C:/Users/swapnajoshi-admin/Documents/GIT_workspace/otherPIprojects/Kim_VSI_IBD/results/"
+source('~/GIT_workspace/otherPIprojects/Kim_VSI_IBD/src/Association_test_functions.R', encoding = 'UTF-8')
+
+```
+
+# load data
+
+```{r}
+vsi_data          <- read.csv(paste(datpath, "vsi_data.csv", sep = "/"), row.names =1)
+vsi_data$Dx       <- as.factor(vsi_data$Dx)
+vsi_data$Dx_UC_CD <- as.factor(vsi_data$Dx_UC_CD)
+```
+
+# Histogram VSI_Score
+
+```{r}
+hist(vsi_data$VSI_Score)
+```
+
+# Correlation between VSI and anxiety
+
+```{r}
+cor.test(vsi_data$VSI_Score, vsi_data$HAD_Anxiety)
+
+p1 <- ggplot(vsi_data, aes(HAD_Anxiety,VSI_Score)) + geom_point (size = 2, aes(color = vsi_data$Dx_UC_CD)) + geom_smooth(method = lm) + labs(title = "Correlation between VSI Score and Anxiety", x = "Anxiety", y = "VSI Score", color = "Dx") + theme(text = element_text(size=12)) + annotate("text", x = 15, y = 75, label = paste("R = 0.51", "p = 2.7e-16", sep = "; "))
+p1
+ggsave(p1, file = paste(outpath, "Anxiety_VSI_all_p1.png"), height = 3, width = 5, units = "in")
+```
+
+# 1. Is VSI different between IBD and HCs, IBS and HCs, IBD and IBS?
+```{r}
+re1 <-wilcox2plus(vsi_data, "Dx", "VSI_Score")
+re1
+```
+
+# within IBD, UC vs HC, CD vs HC and UC vs CD
+
+```{r}
+vsi_data_ibd <- subset(vsi_data, vsi_data$Dx_UC_CD != "IBS"); dim(vsi_data_ibd)
+vsi_data_ibd$Dx_UC_CD <- factor(vsi_data_ibd$Dx_UC_CD)
+re1 <-wilcox2plus(vsi_data_ibd, "Dx_UC_CD", "VSI_Score")
+re1
+```
+
+# Controling for anxiety IBD, IBS and HCs
+
+```{r}
+re <- lm2plusCovar(vsi_data, "Dx", "VSI_Score","HAD_Anxiety")
+re
+# mean and standard deviation
+```
+
+# controling for Anxiety UC, CD, HCs
+
+```{r}
+re1 <- lm2plusCovar(vsi_data_ibd, "Dx_UC_CD", "VSI_Score", "HAD_Anxiety")
+re1
+```
+
+# Box plot
+
+```{r}
+library(ggplot2)
+p1 <- ggplot(vsi_data, aes(Dx,VSI_Score)) + geom_boxplot(aes(fill = vsi_data$Dx)) + theme(text = element_text(size=12)) + labs(title = "VSI Score in IBD compared to IBS and controls", x = "Diagnosis", y = "VSI Score") + guides(fill=FALSE)
+p1
+ggsave(p1, file = paste(outpath, "Dx_VSI_all_p2.png"), height = 3, width = 5, units = "in")
+```
+
+
+```{r}
+vsi_data$Dx_UC_CD <- factor(vsi_data$Dx_UC_CD, levels = c("HC", "UC","Crohns", "IBS"))
+
+p1 <- ggplot(vsi_data, aes(Dx_UC_CD,VSI_Score)) + geom_boxplot(aes(fill = vsi_data$Dx_UC_CD)) + theme(text = element_text(size=12)) + labs(title = "VSI Score in UC, CD, IBS and controls", x = "Diagnosis", y = "VSI Score") + guides(fill=FALSE)
+p1
+ggsave(p1, file = paste(outpath, "VSI_IBD_p3.png"), height = 3, width = 5, units = "in")
+```
+
+# Correlation between VSI and disease activity variables
+# 1.	VSI in ulcerative colitis and how it correlates with the Mayo disease activity index (DAI) and with the Powell Tuck index for UC
+
+```{r}
+vsi_uc <-  subset(vsi_data, vsi_data$Dx_UC_CD =="UC"); dim(vsi_uc)
+
+cor.test(vsi_uc$PTIUC_Score,vsi_uc$VSI_Score, method = "spearman")
+p1 <- ggplot(vsi_uc, aes(PTIUC_Score,VSI_Score)) + geom_point (size = 2) + geom_smooth(method = lm) + labs(title = "Correlation of VSI Score in UC with PTIUC", x = "Powell Tuck index for UC (PTIUC)", y = "VSI Score") + theme(text = element_text(size=12)) + annotate("text", x = 8, y = 58, label = paste("R = 0.18", "p = 0.57", sep = "; "))
+p1
+ggsave(p1, file = paste(outpath, "PTIUC_VSI_UC_p4.png"), height = 3, width = 5, units = "in")
+
+cor.test(vsi_uc$DAI_Score,vsi_uc$VSI_Score, method = "spearman")
+p1 <- ggplot(vsi_uc, aes(DAI_Score,VSI_Score)) + geom_point (size = 2) + geom_smooth(method = lm) + labs(title = "Correlation of VSI Score in UC Mayo DAI", x = "Disease Activity Index (DAI)", y = "VSI Score") + theme(text = element_text(size=12)) + annotate("text", x = 5, y = 58, label = paste("R = 0.20", "p = 0.32", sep = "; "))
+p1
+ggsave(p1, file = paste(outpath, "DAI_VSI_UC_p5.png"), height = 3, width = 5, units = "in")
+```
+
+# 2.	VSI in Crohn's disease and how it correlates with the CDAI and the Harvey Bradshaw index.  I've included a little information about these two disease activity indices below.
+
+```{r}
+vsi_cd <-  subset(vsi_data, vsi_data$Dx_UC_CD =="Crohns"); dim(vsi_cd)
+
+cor.test(vsi_cd$CDAI_Score,vsi_cd$VSI_Score, method = "spearman")
+p1 <- ggplot(vsi_cd, aes(CDAI_Score,VSI_Score)) + geom_point (size = 2) + geom_smooth(method = lm) + labs(title = "Correlation of VSI Score in CD with CDAI score", x = "CDAI Score", y = "VSI Score") + theme(text = element_text(size=12)) + annotate("text", x = 100, y = 70, label = paste("R = 0.04", "p = 0.90", sep = "; "))
+p1
+ggsave(p1, file = paste(outpath, "CDAI_VSI_CD_p6.png"), height = 3, width = 5, units = "in")
+
+# cor.test(vsi_cd$HBI_Score,vsi_cd$VSI_Score)
+# ggplot(vsi_cd, aes(HBI_Score,VSI_Score)) + geom_point (size = 2) + geom_smooth(method = lm) + labs(title = "Correlation of VSI Score in Crohns patients with Harvey Bradshaw index", x = "HBI Score", y = "VSI Score") + theme(text = element_text(size=14)) + annotate("text", x = 5, y = 58, label = paste("R = 0.04", "p = 0.90", sep = "; "))
+# Only 2 data points for HBI score
+```
+
+# 3.	Correlation of VSI in IBD with Anxiety, PROMIS, SF12, and STAI traits
+
+```{r}
+vsi_ibd          <-  subset(vsi_data, vsi_data$Dx =="IBD"); dim(vsi_ibd)
+vsi_ibd$Dx_UC_CD <- factor(vsi_ibd$Dx_UC_CD)
+```
+
+# Anxiety
+
+```{r}
+cor.test(vsi_ibd$VSI_Score, vsi_ibd$HAD_Anxiety, method = "spearman")
+
+p1 <- ggplot(vsi_ibd, aes(HAD_Anxiety,VSI_Score)) + geom_point (size = 2, aes(color = vsi_ibd$Dx_UC_CD)) + geom_smooth(method = lm) + labs(title = "Correlation between VSI Score and Anxiety", x = "Anxiety", y = "VSI Score", color = "Diagnosis") + theme(text = element_text(size=12)) + annotate("text", x = 10, y = 75, label = paste("R = 0.35", "p = 0.002", sep = "; "))
+p1
+
+ggsave(p1, file = paste(outpath, "Anxiety_VSI_IBD_p7.png"), height = 3, width = 5, units = "in")
+```
+
+# SF12
+
+```{r}
+# PCS
+cor.test(vsi_ibd$VSI_Score, vsi_ibd$SF12_PCS, method = "spearman")
+
+p1 <- ggplot(vsi_ibd, aes(SF12_PCS,VSI_Score)) + geom_point (size = 2, aes(color = vsi_ibd$Dx_UC_CD)) + geom_smooth(method = lm) + labs(title = "Correlation between VSI Score and SF12_PCS", x = "SF12_PCS", y = "VSI Score", color = "Diagnosis") + theme(text = element_text(size=12)) + annotate("text", x = 60, y = 79, label = paste("R = -0.45", "p = 0.0001", sep = "; "))
+p1
+ggsave(p1, file = paste(outpath, "SF12_PCS_VSI_IBD_p8.png"), height = 3, width = 5.5, units = "in")
+
+# MCS
+cor.test(vsi_ibd$VSI_Score, vsi_ibd$SF12_MCS, method = "spearman")
+
+p1 <- ggplot(vsi_ibd, aes(SF12_MCS,VSI_Score)) + geom_point (size = 2, aes(color = vsi_ibd$Dx_UC_CD)) + geom_smooth(method = lm) + labs(title = "Correlation between VSI Score and SF12_MCS", x = "SF12_MCS", y = "VSI Score", color = "Diagnosis") + theme(text = element_text(size=12)) + annotate("text", x = 52, y = 79, label = paste("R = -0.23", "p = 0.05", sep = "; "))
+p1
+ggsave(p1, file = paste(outpath, "SF12_MCS_VSI_IBD_p9.png"), height = 3, width = 5.5, units = "in")
+
+```
+
+# PROMIS
+
+```{r}
+cor.test(vsi_ibd$VSI_Score, vsi_ibd$PROMISSleep_Score_R, method = "spearman")
+
+p1 <- ggplot(vsi_ibd, aes(PROMISSleep_Score_R,VSI_Score)) + geom_point (size = 2, aes(color = vsi_ibd$Dx_UC_CD)) + geom_smooth(method = lm) + labs(title = "Correlation between VSI Score and PROMIS Sleep Score", x = "PROMIS Sleep Score_R", y = "VSI Score", color = "Diagnosis") + theme(text = element_text(size=11)) + annotate("text", x = 24, y = 65, label = paste("R = 0.69", "p = 0.0002", sep = "; "))
+p1
+ggsave(p1, file = paste(outpath, "PROMIS_R_VSI_IBD_p10.png"), height = 3, width = 5.5, units = "in")
+
+cor.test(vsi_ibd$VSI_Score, vsi_ibd$PROMISSleep_Score, method = "spearman")
+
+p1 <- ggplot(vsi_ibd, aes(PROMISSleep_Score,VSI_Score)) + geom_point (size = 2, aes(color = vsi_ibd$Dx_UC_CD)) + geom_smooth(method = lm) + labs(title = "Correlation between VSI Score and PROMIS Sleep Score", x = "PROMIS Sleep Score", y = "VSI Score", color = "Diagnosis") + theme(text = element_text(size=11)) + annotate("text", x = 52, y = 65, label = paste("R = 0.69", "p = 0.0002", sep = "; "))
+p1
+ggsave(p1, file = paste(outpath, "PROMIS_VSI_IBD_p11.png"), height = 3, width = 5.5, units = "in")
+
+```
+
+# STAI
+
+```{r}
+cor.test(vsi_ibd$VSI_Score, vsi_ibd$STAI_TAnxiety_raw, method = "spearman")
+
+p1 <- ggplot(vsi_ibd, aes(STAI_TAnxiety_raw,VSI_Score)) + geom_point (size = 2, aes(color = vsi_ibd$Dx_UC_CD)) + geom_smooth(method = lm) + labs(title = "Correlation between VSI Score and STAI Trait Anxiety", x = "STAI Trait Anxiety raw", y = "VSI Score", color = "Diagnosis") + theme(text = element_text(size=11)) + annotate("text", x = 45, y = 75, label = paste("R = 0.22", "p = 0.06", sep = "; "))
+p1
+ggsave(p1, file = paste(outpath, "STAI_TAnxiety_R_VSI_IBD_p12.png"), height = 3, width = 5, units = "in")
+
+cor.test(vsi_ibd$VSI_Score, vsi_ibd$STAI_TAnxiety, method = "spearman")
+
+p1 <- ggplot(vsi_ibd, aes(STAI_TAnxiety,VSI_Score)) + geom_point (size = 2, aes(color = vsi_ibd$Dx_UC_CD)) + geom_smooth(method = lm) + labs(title = "Correlation between VSI Score and STAI Trait Anxiety", x = "STAI Trait Anxiety", y = "VSI Score", color = "Diagnosis") + theme(text = element_text(size=11)) + annotate("text", x = 60, y = 75, label = paste("R = 0.22", "p = 0.06", sep = "; "))
+p1
+ggsave(p1, file = paste(outpath, "STAI_TAnxiety_VSI_IBD_p13.png"), height = 3, width = 5, units = "in")
+```
+

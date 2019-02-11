@@ -1,0 +1,259 @@
+---
+title: "Pancreatic_Cancer_Gene_Expression_06172016"
+author: "Swapna Mahurkar-Joshi"
+date: "June 17, 2016"
+output: word_document
+---
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r, messsage = FALSE}
+# source("http://bioconductor.org/biocLite.R")
+# biocLite("hgu133plus2.db")
+# library(convert)
+# as(object, "ExpressionSet")
+library(stringi)
+ library(limma)
+ library(affy)
+ library(affyPLM)
+library("GEOquery")
+ library(genefilter)
+library(simpleaffy)
+library(RColorBrewer)
+ library(hgu133plus2.db)
+ library(annotate)
+
+```
+
+```{r}
+setwd("C:/Users/swapnajoshi/Documents/UCLA_research/pancreatic_cancer/Methylation PancCa/Expression_data/cel.files/")
+
+celfiles <- read.affy(covdesc="phenodata1.txt")
+celfiles
+
+celfiles.rma <- rma(celfiles)
+celfiles.rma
+cols <- brewer.pal(8, "Set1")
+# 
+setwd("C:/Users/swapnajoshi-admin/Documents/GIT_workspace/Panc_can_ucla/Gene_expression/")
+png("boxplot_qc.png")		
+boxplot(celfiles, col=cols)
+dev.off()
+
+# png("boxplot_normalized_qc.png")		 
+# boxplot(celfiles.rma, col=cols)
+# dev.off()
+
+png("den.vs.log.intensity.histogram_qc.png")		
+hist(celfiles, col=cols)
+dev.off()
+
+# png("den.vs.log.intensity.histogram_norm_qc.png")		
+# hist(celfiles.rma, col=cols)
+# dev.off()
+
+```
+
+```{r Figure1: raw and normalized boxplots, histograms}
+boxplot(celfiles, col=cols)
+# boxplot(celfiles.rma, col=cols)
+
+hist(celfiles, col=cols)
+# hist(celfiles.rma, col=cols)
+```
+
+```{r}
+# Perform probe-level metric calculations on the CEL files:
+celfiles.qc <- fitPLM(celfiles)
+
+png("image.cel.png")	
+image(celfiles.qc, which=1, add.legend=TRUE)
+dev.off()
+
+# affyPLM also provides more informative boxplots
+# RLE (Relative Log Expression) plots should have
+# values close to zero.
+png("C:/Users/swapnajoshi/Documents/UCLA_research/pancreatic_cancer/Methylation PancCa/Expression_data/exp.analysis/rle.image.png")	
+RLE(celfiles.qc, main="RLE")
+dev.off()
+
+# We can also use NUSE (Normalised Unscaled Standard Errors).
+# The median standard error should be 1 for most genes.
+png("image.nuse.png")	
+NUSE(celfiles.qc, main="NUSE")
+dev.off()
+```
+
+```{r}
+# image(celfiles.qc, which=1, add.legend=TRUE)
+# RLE(celfiles.qc, main="RLE")
+# NUSE(celfiles.qc, main="NUSE")
+```
+
+```{r}
+eset <- exprs(celfiles.rma)
+#heirarchical clustering
+distance <- dist(t(eset),method="maximum")
+clusters <- hclust(distance)
+ 
+png("clusters.norm.png")	
+plot(clusters)
+dev.off()
+```
+
+```{r}
+#Now we have looked at the data, we can go on to analyse it. The first stage of analysis is to filter out uninformative data such as control probesets and other internal controls as well as removing genes with low variance, that would be unlikely to pass statistical tests for differential expression, or are expressed uniformly close to background detection levels. The modifiers to nsFilter below tell nsFilter not to remove probesets without Entrez Gene identifiers, or have duplicated Entrez Gene identifiers.
+
+celfiles.filtered <- nsFilter(celfiles.rma, require.entrez=FALSE, remove.dupEntrez=FALSE)
+
+# What got removed and why?
+celfiles.filtered$filter.log$numLowVar
+# [1] 27307
+
+celfiles.filtered$filter.log$feature.exclude
+# [1] 62
+
+#From this we conclude 27,307 probesets have been removed for reasons of low variance, and 62 control probesets have been removed as well.
+
+#Finding differentially expressed probesets
+
+#Now we have a filtered dataset, we can send the information to limma for differential gene expression analysis. First of all we need to extract information about the samples:
+
+samples <- celfiles.rma$Target
+ 
+# check the results of this
+		 samples
+		 #  [1] "Cancer" "Normal" "Cancer" "Cancer" "Cancer" "Normal" "Normal" "Normal"
+		 #  [9] "Normal" "Normal" "Normal" "Cancer" "Cancer" "Cancer" "Normal" "Cancer"
+		 # [17] "Cancer" "Cancer" "Cancer" "Cancer" "Cancer" "Cancer"
+
+
+# convert into factors
+		 samples <- as.factor(samples)
+		 
+# check factors have been assigned
+		 samples
+		 #  [1] Cancer Normal Cancer Cancer Cancer Normal Normal Normal Normal Normal
+		 # [11] Normal Cancer Cancer Cancer Normal Cancer Cancer Cancer Cancer Cancer
+		 # [21] Cancer Cancer
+		 # Levels: Cancer Normal
+		 
+# Filter normals that have tumor contamination
+		 
+cont<-c("8033","11841")
+
+# set up the experimental design
+design <- model.matrix(~0 + samples)
+colnames(design) <- c("Cancer", "Normal")
+
+
+# inspect the experiment design
+		 design
+```
+
+```{r}
+		 #At this point we have normalised filtered data, and a description of the data and the samples and experimental design. This can be fed into limma for analysis.
+
+# fit the linear model to the filtered expression set
+fit <- lmFit(exprs(celfiles.filtered$eset), design)
+		 
+# set up a contrast matrix to compare cancer vs normal
+contrast.matrix <- makeContrasts(cancer_normal = Cancer-Normal, levels=design)
+
+ 
+# check the contrast matrix
+contrast.matrix
+		#         Contrasts
+		# Levels   cancer_normal
+		#   Cancer            1
+		#   Normal            -1
+
+	
+# Now the contrast matrix is combined with the per-probeset linear model fit.
+can.nor_fits <- contrasts.fit(fit, contrast.matrix)
+can_ebFit <- eBayes(can.nor_fits)
+ 
+# return the top 10 results for any given contrast
+# coef=1 is huvec_choroid, coef=2 is huvec_retina
+
+topTable(can_ebFit, number=10, coef=1)
+
+#To impose a fold change cut off, and see how many genes are returned you can use the lfc modifier for topTable, here we show the results for fold changes of 5,4,3 and 2 in terms of the number of probesets.
+
+nrow(topTable(can_ebFit, coef=1, number=27306, lfc=0.5849625))
+# [1] 9218
+
+nrow(topTable(can_ebFit, coef=1, number=27306))
+# [1] 27306
+
+```
+
+```{r}
+probeset.list <- topTable(can_ebFit, coef=1, number=27306, lfc=1.5)
+entire.probeset.list <- topTable(can_ebFit, coef=1, number=27306)
+		
+top.35<-topTable(can_ebFit, coef=1, number=27306, lfc=5)
+
+# write.fit(ebayes, file = "pan_can_data_allData_separate_BH_adj.txt", adjust="BH", method="separate", sep="\t")
+		
+#Annotating the results with associated gene symbols
+
+#In order to annotate the probesets into gene symbols we need to install and load the associated database package and the annotate package, then we can extract the probeset ID’s from the topTable results, and match the symbols
+ gene.symbols <- getSYMBOL(row.names(probeset.list), "hgu133plus2.db")
+ results <- cbind(probeset.list, gene.symbols)
+ head(results)
+ 
+ 
+ gene.symbols1 <- getSYMBOL(row.names(entire.probeset.list), "hgu133plus2.db")
+ all.probes.results <- cbind(entire.probeset.list, gene.symbols1)
+all.probes.results$Fold_Change <- foldChange(all.probes.results$logFC)
+ head(all.probes.results)
+ 
+gene.symbols2 <- getSYMBOL(row.names(top.35), "hgu133plus2.db")
+top35.results <- cbind(top.35, gene.symbols2)
+head(top35.results)
+
+sigResults <- subset(results,results$adj.P.Val <=0.05); dim(sigResults) # 1495    7
+dim(sigResults[sigResults$logFC>0,]); #779   7
+dim(sigResults[sigResults$logFC<0,]); #716   7
+write.table(results, "Pan_can_results1.5.txt", sep="\t", quote=FALSE)
+write.table(all.probes.results, "pan_can_all.probes.result.txt", sep="\t", quote=FALSE)
+write.table(sigResults, "Pan_can_resultsp.0.05.1.5.txt", sep="\t", quote=FALSE)
+ 
+save(can_ebFit,contrasts.fit,fit,celfiles,celfiles.rma,eset,celfiles.qc, file="panCan_geneExpression_Preporcessing_QC.Rda")
+
+save(all.probes.results, results, sigResults,  gene.symbols,  gene.symbols1, file = "panCan_geneExpression_results.Rda")
+ 
+```
+
+```{r}
+
+eset.sel<-eset[row.names(eset)%in%row.names(all.probes.results),]
+eset.sel<-eset.sel[row.names(all.probes.results),]
+eset.sel<-cbind(eset.sel,all.probes.results)
+eset.sel$absFC<-abs(eset.sel$logFC)
+eset.sel1<-eset.sel[order(-eset.sel$absFC, eset.sel$gene.symbols1),]
+eset.sel1$dup<-duplicated(eset.sel1$gene.symbols1)
+
+eset.sel2<-subset(eset.sel1, eset.sel1$dup=="FALSE")
+dim(eset.sel2)
+# [1] 12998    31
+
+eset.sel2<-na.omit(eset.sel2)
+row.names(eset.sel2)<-eset.sel2$gene.symbols1
+
+
+can.exp1<-eset.sel2[,grep("Ca",colnames(eset.sel2))]
+nor.exp1<-eset.sel2[,c(grep("N",colnames(eset.sel2)),15)]
+
+#select samples that overlap between meth and expr
+
+colnames(can.exp1)<-c("11212","9855","9335","9709","11367","11582","11261","7817","11855","8079","8830","6487","12030","12072")
+colnames(nor.exp1)<-c("5756","6667","7755","12166","7716","6854","7694","11574")
+		
+
+save(nor.exp1, can.exp1, eset.sel2, eset, file = "ge_pan_can.Rda")
+```
+
